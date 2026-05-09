@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Settings, X } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
+import { getVersion } from '@tauri-apps/api/app';
 
 import { setJournalDir as persistJournalDir } from '../lib/config';
+import { checkForUpdate } from '../lib/updater';
 import { useMargin } from '../store';
 
 interface SettingsModalProps {
@@ -14,6 +16,28 @@ function SettingsModal({ onClose }: SettingsModalProps): JSX.Element {
   const setJournalDir = useMargin((s) => s.setJournalDir);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [checkStatus, setCheckStatus] = useState<'idle' | 'upToDate'>('idle');
+
+  useEffect(() => {
+    getVersion()
+      .then((v) => setAppVersion(v))
+      .catch(() => undefined);
+  }, []);
+
+  function handleCheckForUpdates(): void {
+    void (async () => {
+      const { updateAvailable: before } = useMargin.getState();
+      // Manual recheck always ignores the suppression list
+      await checkForUpdate(true);
+      const { updateAvailable: after } = useMargin.getState();
+      if (after === null || after === before) {
+        // No new update surfaced — let the user know they're up to date
+        setCheckStatus('upToDate');
+        window.setTimeout(() => setCheckStatus('idle'), 3000);
+      }
+    })();
+  }
 
   async function changeFolder(): Promise<void> {
     setError(null);
@@ -83,6 +107,19 @@ function SettingsModal({ onClose }: SettingsModalProps): JSX.Element {
             {error}
           </p>
         ) : null}
+
+        <div className="um-row um-version-row">
+          <p className="um-meta">
+            margin{appVersion !== null ? ` v${appVersion}` : ''}
+          </p>
+          <button
+            type="button"
+            className="um-check-update"
+            onClick={handleCheckForUpdates}
+          >
+            {checkStatus === 'upToDate' ? "You're up to date." : 'Check for updates'}
+          </button>
+        </div>
 
         <hr className="um-divider" />
 

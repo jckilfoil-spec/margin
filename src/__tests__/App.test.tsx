@@ -10,6 +10,18 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
   confirm: vi.fn(),
 }));
 
+vi.mock('@tauri-apps/plugin-updater', () => ({
+  check: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('@tauri-apps/plugin-shell', () => ({
+  open: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/api/app', () => ({
+  getVersion: vi.fn().mockResolvedValue('0.0.1'),
+}));
+
 vi.mock('../components/PaperEditor', () => ({
   PaperEditor: ({ initialMarkdown }: { initialMarkdown: string }) => (
     <div className="pe-content" data-testid="pe-content">

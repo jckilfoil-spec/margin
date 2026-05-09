@@ -829,3 +829,104 @@ a:hover {
   text-decoration-color: var(--ink-soft);
   color: var(--ink-dim);
 }
+
+/*
+ * .tu-* — update toast. Fixed to the bottom-right corner of the window.
+ * Appears when a newer signed release is available. Fades + slides in over
+ * --motion-base to match the chunky-checkbox motion vocabulary.
+ * Z-index 100: above editor (5), below modals (200+).
+ */
+@keyframes tu-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tu-toast {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 320px;
+  padding: var(--space-5) var(--space-7);
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  animation: tu-slide-in var(--motion-base) both;
+}
+
+.tu-body {
+  margin: 0 0 var(--space-3) 0;
+  font-size: var(--text-body);
+  color: var(--ink);
+  line-height: var(--line-height);
+}
+
+.tu-body:last-child {
+  margin-bottom: 0;
+}
+
+.tu-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+}
+
+.tu-link {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-decoration: none;
+  transition: text-decoration var(--motion-fast);
+}
+
+.tu-link:hover {
+  text-decoration: underline;
+}
+
+.tu-link-primary {
+  font-weight: 600;
+}
+
+.tu-sep {
+  color: var(--ink-soft);
+  user-select: none;
+}
+
+/*
+ * .um-version-row — inline row in the settings modal for version + update check.
+ */
+.um-version-row {
+  align-items: center;
+  margin-bottom: var(--space-5);
+}
+
+.um-check-update {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-decoration: none;
+  flex: none;
+  white-space: nowrap;
+  transition: text-decoration var(--motion-fast);
+}
+
+.um-check-update:hover {
+  text-decoration: underline;
+}

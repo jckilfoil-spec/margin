@@ -4,6 +4,7 @@ import { FolderPickerModal } from './components/FolderPickerModal';
 import { PaperEditor } from './components/PaperEditor';
 import { PromptButton } from './components/PromptButton';
 import { Sidebar } from './components/Sidebar';
+import { UpdateToast } from './components/UpdateToast';
 import { UserMenu } from './components/UserMenu';
 import {
   getJournalDir,
@@ -17,6 +18,7 @@ import {
   readJournalFile,
   writeJournalFile,
 } from './lib/storage';
+import { checkForUpdate } from './lib/updater';
 import { useMargin } from './store';
 
 const AUTOSAVE_MS = 500;
@@ -154,6 +156,24 @@ export function App(): JSX.Element {
     return () => window.removeEventListener('blur', onBlur);
   }, [flush]);
 
+  // 5) Register the flush function on the store so that UpdateToast can
+  // force-flush pending edits to disk before triggering downloadAndInstall.
+  useEffect(() => {
+    useMargin.getState().setFlushFn(flush);
+    return () => {
+      useMargin.getState().setFlushFn(async () => undefined);
+    };
+  }, [flush]);
+
+  // 6) Schedule the launch update check ~5s after mount. Non-blocking;
+  // any errors are swallowed inside checkForUpdate.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      checkForUpdate().catch(() => undefined);
+    }, 5000);
+    return () => window.clearTimeout(t);
+  }, []);
+
   async function handlePicked(path: string): Promise<void> {
     try {
       await persistJournalDir(path);
@@ -199,6 +219,7 @@ export function App(): JSX.Element {
         ) : null}
       </main>
       <PromptButton />
+      <UpdateToast />
     </div>
   );
 }
