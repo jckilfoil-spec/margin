@@ -62,7 +62,7 @@
   /* Motion */
   --motion-fast:  0.15s ease;
   --motion-base:  0.20s ease;
-  --motion-check: 0.14s cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-check: 0.16s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Reset — minimal, intentional. */
@@ -339,10 +339,10 @@ a:hover {
 
 /*
  * .app-shell — main layout: fixed sidebar on the left, paper on the right.
- * The sidebar's footer holds the user menu + prompt button (DESIGN.md
- * convention: bottom-left).
+ * Position: relative so the floating prompt button anchors here.
  */
 .app-shell {
+  position: relative;
   display: flex;
   height: 100%;
   width: 100%;
@@ -498,26 +498,62 @@ a:hover {
 }
 
 /*
- * .pb-* — "Ask me something" prompt button (sidebar footer).
+ * .pb-* — prompt button. Floats at the top-left of the page (between the
+ * sidebar and the title), pinned via absolute positioning on .app-shell so
+ * editor scrolling doesn't move it. Icon-only by default; hover expands a
+ * pill chip ("Prompt please!") to the right.
  */
 .pb-btn {
+  position: absolute;
+  top: var(--space-3);
+  left: calc(var(--sidebar-w) + var(--space-3));
+  z-index: 5;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-5);
-  background: transparent;
+  height: 28px;
+  padding: 0;
+  background: var(--paper);
   border: 1px solid var(--ink-soft);
   border-radius: 999px;
   color: var(--ink-dim);
-  font-size: var(--text-sm);
   font-family: inherit;
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: border-color var(--motion-fast), color var(--motion-fast);
+  overflow: hidden;
+  transition:
+    border-color var(--motion-base),
+    color var(--motion-base);
 }
 
-.pb-btn:hover:not(:disabled) {
+.pb-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+.pb-text {
+  white-space: nowrap;
+  max-width: 0;
+  padding-right: 0;
+  overflow: hidden;
+  transition:
+    max-width var(--motion-base),
+    padding-right var(--motion-base);
+}
+
+.pb-btn:hover:not(:disabled),
+.pb-btn:focus-visible {
   border-color: var(--ink);
   color: var(--ink);
+}
+
+.pb-btn:hover:not(:disabled) .pb-text,
+.pb-btn:focus-visible .pb-text {
+  max-width: 200px;
+  padding-right: var(--space-5);
 }
 
 .pb-btn:disabled {
@@ -528,20 +564,26 @@ a:hover {
 /*
  * .cb-* — chunky checkbox. The signature interaction.
  *
+ * Layout:
+ *   - .cb-box is absolutely positioned out into the LEFT GUTTER, past
+ *     the red margin rule. Editor content starts at margin-x + space-7
+ *     from the paper-surface left, so a left of -(space-7 + space-3 +
+ *     box-width) puts the box's right edge ~space-3 shy of the margin
+ *     line — the box visibly lives to the left of the margin.
+ *   - .cb-content takes the natural block width: text flows on the
+ *     writing area like any paragraph.
+ *
  * Geometry:
  *   - 24x24px box, 2px ink border, 4px radius.
- *   - 32x32 SVG positioned at top:-4 left:-4 — gives 4px overflow each side.
+ *   - 32x32 SVG at top:-4 left:-4 — 4px overflow on every side.
  *   - Path "M 4 18 L 13 26 L 30 4" with stroke-width 4 + round caps:
- *     the right end's round cap extends 2px past x=30, hitting the box
- *     right edge at x=32 (4px overflow from the 24x24 box). The check
- *     visibly spills out — that overflow IS the feature.
- *   - Animation: stroke-dashoffset transitions from path length to 0
- *     (drawing in) over --motion-check.
+ *     the right cap extends 2px past x=30, hitting the SVG right edge.
+ *     The check visibly spills outside the box — that overflow IS the
+ *     feature.
+ *   - Animation: stroke-dashoffset goes path length → 0 over --motion-check.
  */
 .cb-li {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
+  position: relative;
   list-style: none;
   line-height: var(--line-height);
   margin: 0;
@@ -549,7 +591,9 @@ a:hover {
 }
 
 .cb-box {
-  flex: none;
+  position: absolute;
+  top: 2px;
+  left: calc(-1 * (var(--space-7) + var(--space-3) + 24px));
   width: 24px;
   height: 24px;
   padding: 0;
@@ -557,10 +601,7 @@ a:hover {
   border: 2px solid var(--ink);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  position: relative;
   overflow: visible;
-  /* Sit the box so its center is roughly on the line's x-height. */
-  margin-top: 2px;
   transition: filter var(--motion-fast);
 }
 
@@ -587,11 +628,6 @@ a:hover {
   stroke-linecap: round;
   stroke-linejoin: round;
   transition: stroke-dashoffset var(--motion-check);
-}
-
-.cb-content {
-  flex: 1;
-  min-width: 0;
 }
 
 .cb-li[data-checked='true'] .cb-content {

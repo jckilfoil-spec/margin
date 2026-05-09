@@ -30,10 +30,12 @@ export function PromptButton(): JSX.Element {
       className="pb-btn"
       onClick={ask}
       disabled={editor === null}
-      title="Insert a reflection prompt"
+      aria-label="Insert a reflection prompt"
     >
-      <Sparkles size={14} aria-hidden="true" />
-      <span>Ask me something</span>
+      <span className="pb-icon">
+        <Sparkles size={14} aria-hidden="true" />
+      </span>
+      <span className="pb-text">Prompt please!</span>
     </button>
   );
 }

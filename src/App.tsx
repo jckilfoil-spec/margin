@@ -175,7 +175,6 @@ export function App(): JSX.Element {
         <Sidebar />
         <div className="sb-footer">
           <UserMenu />
-          <PromptButton />
         </div>
       </aside>
       <main className="paper-surface" aria-label="margin notepad">
@@ -192,6 +191,7 @@ export function App(): JSX.Element {
           />
         ) : null}
       </main>
+      <PromptButton />
     </div>
   );
 }
