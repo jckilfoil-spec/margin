@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Typecheck + Unit tests + E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build (smoke-test the build pipeline)
+        run: npm run build
+
+      # Optional: uncomment to add E2E tests
+      # - name: Install Playwright browsers
+      #   run: npx playwright install --with-deps chromium
+      # - name: E2E tests
+      #   run: npm run test:e2e
+      #   env:
+      #     VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      #     VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+  # LLM eval gate — only runs when prompts change.
+  # Uncomment when you have prompts in src/prompts/ and an eval suite.
+  # evals:
+  #   name: LLM Evals
+  #   runs-on: ubuntu-latest
+  #   if: |
+  #     contains(join(github.event.pull_request.changed_files.*.filename, ','), 'src/prompts/')
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
+  #         cache: npm
+  #     - run: npm ci
+  #     - name: Run evals
+  #       run: npm run evals   # exits non-zero if pass rate < threshold
+  #       env:
+  #         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
