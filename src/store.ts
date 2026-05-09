@@ -6,11 +6,12 @@ interface MarginStore {
   // in app config — so writes here happen alongside the Tauri command.
   journalDir: string | null;
 
-  // Filename of the journal page currently open (e.g., "2026-05-09.md").
-  activeFilename: string | null;
+  // Absolute path of the journal page currently open. Lives at the root
+  // of journalDir for the virtual "Daily" group, or in a section subdir.
+  activePath: string | null;
 
   // Bumped to nudge the sidebar to re-list files (e.g., after we create
-  // today's file on first open).
+  // today's file on first open, or after add/rename/delete).
   refreshKey: number;
 
   // The live TipTap editor instance, if mounted. PromptButton reaches for
@@ -18,18 +19,18 @@ interface MarginStore {
   editor: Editor | null;
 
   setJournalDir: (dir: string | null) => void;
-  setActiveFilename: (filename: string | null) => void;
+  setActivePath: (path: string | null) => void;
   bumpRefresh: () => void;
   setEditor: (editor: Editor | null) => void;
 }
 
 export const useMargin = create<MarginStore>((set) => ({
   journalDir: null,
-  activeFilename: null,
+  activePath: null,
   refreshKey: 0,
   editor: null,
   setJournalDir: (dir) => set({ journalDir: dir }),
-  setActiveFilename: (filename) => set({ activeFilename: filename }),
+  setActivePath: (path) => set({ activePath: path }),
   bumpRefresh: () => set((s) => ({ refreshKey: s.refreshKey + 1 })),
   setEditor: (editor) => set({ editor }),
 }));

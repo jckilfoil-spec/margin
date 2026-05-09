@@ -1,18 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, waitFor } from '@testing-library/react';
 
-// Mock Tauri surfaces before importing App (which transitively imports them).
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: vi.fn(),
+  confirm: vi.fn(),
 }));
 
-// Mock PaperEditor — ProseMirror is integration-tested in the live app, not
-// in jsdom unit tests. The mock just renders the markdown so we can assert
-// the right file is being loaded.
 vi.mock('../components/PaperEditor', () => ({
   PaperEditor: ({ initialMarkdown }: { initialMarkdown: string }) => (
     <div className="pe-content" data-testid="pe-content">
@@ -30,7 +27,7 @@ const invokeMock = vi.mocked(invoke);
 function resetStore(): void {
   useMargin.setState({
     journalDir: null,
-    activeFilename: null,
+    activePath: null,
     refreshKey: 0,
     editor: null,
   });
@@ -75,6 +72,7 @@ describe('App', () => {
         case 'read_journal_file':
           return '# 2026-05-08\n\nhello\n';
         case 'list_journal_files':
+        case 'list_sections':
           return [];
         default:
           return null;
@@ -85,7 +83,7 @@ describe('App', () => {
     expect(editor.textContent).toContain('2026-05-08');
   });
 
-  it("creates today's file with a date header when missing", async () => {
+  it("creates today's file at the journal root when missing", async () => {
     const writes: Array<{ path: string; contents: string }> = [];
     invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
       switch (cmd) {
@@ -103,6 +101,7 @@ describe('App', () => {
         case 'read_journal_file':
           return '# 2026-05-08\n\n';
         case 'list_journal_files':
+        case 'list_sections':
           return [];
         default:
           return null;
@@ -118,8 +117,8 @@ describe('App', () => {
     expect(first?.contents.startsWith('# ')).toBe(true);
   });
 
-  it('renders the sidebar with sb-shell when a journal dir is set', async () => {
-    invokeMock.mockImplementation(async (cmd: string) => {
+  it('renders the sidebar shell with sections + pages', async () => {
+    invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
       switch (cmd) {
         case 'get_journal_dir':
           return '/tmp/journal';
@@ -129,14 +128,22 @@ describe('App', () => {
           return true;
         case 'read_journal_file':
           return '# 2026-05-08\n';
-        case 'list_journal_files':
-          return ['2026-05-08.md', '2026-05-07.md'];
+        case 'list_journal_files': {
+          const a = args as { dir: string };
+          if (a.dir === '/tmp/journal') return ['2026-05-08.md', '2026-05-07.md'];
+          if (a.dir === '/tmp/journal/Projects') return ['ideas.md'];
+          return [];
+        }
+        case 'list_sections':
+          return ['Projects'];
         default:
           return null;
       }
     });
     const { container, findByText } = render(<App />);
-    await findByText('2026-05-08');
+    await findByText('Daily');
+    await findByText('Projects');
+    await findByText('ideas');
     expect(container.querySelector('.sb-shell')).not.toBeNull();
     expect(container.querySelector('.app-shell')).not.toBeNull();
   });

@@ -10,12 +10,17 @@ pub fn run() {
             config::get_journal_dir,
             config::set_journal_dir,
             journal::list_journal_files,
+            journal::list_sections,
+            journal::create_section,
+            journal::rename_section,
+            journal::delete_section,
+            journal::rename_journal_file,
             journal::read_journal_file,
             journal::write_journal_file,
             journal::journal_file_exists,
             journal::ensure_journal_dir,
             journal::delete_journal_file,
-            journal::append_today_page,
+            journal::append_page,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

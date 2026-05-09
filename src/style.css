@@ -365,43 +365,46 @@ a:hover {
 }
 
 /*
- * .sb-* — sidebar list of journal days, grouped by month, newest first.
- * The "+ New page" button at the top creates a YYYY-MM-DD_NN.md file for
- * today; per-day rows show a × on hover/focus that confirms then deletes.
+ * .sb-* — sidebar. Top: "+ New section" inline link. Then a virtual
+ * "Daily" group for journalDir-root .md files (uneditable header, "+"
+ * adds a today-named page). Then user-created sections, each a real
+ * subdirectory with full rename / delete via the pencil icon.
  */
 .sb {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-7) var(--space-5);
+  padding: var(--space-5) var(--space-4);
 }
 
-.sb-add {
+.sb-add-section {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  width: 100%;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   margin-bottom: var(--space-7);
   background: transparent;
-  border: 1px dashed var(--ink-soft);
-  border-radius: var(--radius-sm);
-  color: var(--ink-dim);
+  border: 0;
+  color: var(--ink-soft);
   font-family: inherit;
   font-size: var(--text-sm);
   cursor: pointer;
-  transition:
-    border-color var(--motion-fast),
-    color var(--motion-fast);
+  border-radius: var(--radius-sm);
+  transition: color var(--motion-fast), background var(--motion-fast);
 }
 
-.sb-add:hover:not(:disabled) {
-  border-color: var(--ink);
+.sb-add-section:hover:not(:disabled) {
   color: var(--ink);
+  background: rgba(0, 0, 0, 0.04);
 }
 
-.sb-add:disabled {
+.sb-add-section:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.sb-new-section {
+  margin-bottom: var(--space-7);
+  padding: 0 var(--space-3);
 }
 
 .sb-empty {
@@ -411,35 +414,62 @@ a:hover {
   font-style: italic;
 }
 
-.sb-month {
+.sb-section {
   margin: 0 0 var(--space-7) 0;
 }
 
-.sb-month-header {
-  margin: 0 0 var(--space-3) var(--space-3);
+.sb-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  position: relative;
+}
+
+.sb-section-name {
+  flex: 1;
+  margin: 0;
   font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ink-dim);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.sb-days {
+.sb-section-actions {
+  display: flex;
+  gap: var(--space-1);
+  opacity: 0;
+  transition: opacity var(--motion-fast);
+}
+
+.sb-section-header:hover .sb-section-actions,
+.sb-section-header:focus-within .sb-section-actions {
+  opacity: 1;
+}
+
+.sb-pages {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.sb-day-row {
+.sb-page-row {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
-.sb-day {
-  display: block;
-  width: 100%;
+.sb-page {
+  flex: 1;
   text-align: left;
-  /* Right padding leaves room for the absolutely-positioned × button. */
-  padding: var(--space-2) calc(var(--space-7) + var(--space-2)) var(--space-2)
+  /* Right padding leaves room for the pencil button, kept hidden until hover. */
+  padding: var(--space-2) calc(var(--space-7) + var(--space-1)) var(--space-2)
     var(--space-4);
   font-size: var(--text-base);
   color: var(--ink-dim);
@@ -448,27 +478,27 @@ a:hover {
   background: transparent;
   border: 0;
   font-family: inherit;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   transition: background var(--motion-fast), color var(--motion-fast);
 }
 
-.sb-day:hover {
+.sb-page:hover {
   background: rgba(0, 0, 0, 0.04);
   color: var(--ink);
 }
 
-.sb-day.is-active {
+.sb-page.is-active {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 500;
 }
 
-.sb-day-delete {
-  position: absolute;
-  right: var(--space-2);
-  top: 50%;
-  transform: translateY(-50%);
-  width: 20px;
-  height: 20px;
+.sb-row-edit {
+  width: 22px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -477,21 +507,116 @@ a:hover {
   border: 0;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  opacity: 0;
+  flex: none;
   transition:
     opacity var(--motion-fast),
     background var(--motion-fast),
     color var(--motion-fast);
 }
 
-.sb-day-row:hover .sb-day-delete,
-.sb-day-row:focus-within .sb-day-delete {
+.sb-row-edit:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink);
+}
+
+.sb-row-edit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Page-row pencil only appears on hover/focus to keep the rail quiet. */
+.sb-page-row .sb-row-edit {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+}
+
+.sb-page-row:hover .sb-row-edit,
+.sb-page-row:focus-within .sb-row-edit {
   opacity: 1;
 }
 
-.sb-day-delete:hover {
+.sb-empty {
+  margin: var(--space-2) var(--space-4);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+
+/*
+ * .ef-* — inline edit field used by sections and pages. Save / cancel /
+ * (optional) delete buttons sit alongside the input so the row never
+ * jumps height when entering edit mode.
+ */
+.ef {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  width: 100%;
+  padding: var(--space-1) 0;
+}
+
+.ef-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-size: var(--text-base);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.ef-input:focus {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.ef-input:disabled {
+  opacity: 0.6;
+}
+
+.ef-btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--ink-soft);
+  flex: none;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.ef-btn:hover:not(:disabled) {
   background: rgba(0, 0, 0, 0.06);
+}
+
+.ef-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ef-save:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.ef-delete:hover:not(:disabled) {
   color: #b22020;
+}
+
+.ef-error {
+  flex: 0 0 100%;
+  font-size: var(--text-xs);
+  color: #b22020;
+  padding-left: var(--space-3);
 }
 
 .sb-footer {

@@ -27,14 +27,51 @@ export async function deleteJournalFile(path: string): Promise<void> {
   await invoke('delete_journal_file', { path });
 }
 
-// Atomically allocates the next "_NN" page for `date` inside `dir`. The
-// allocation lives in Rust (OpenOptions::create_new) so concurrent calls
-// can never collide on a filename. Returns the created filename.
-export async function appendTodayPage(
+// Atomically allocates the next page named `<base>` (or `<base>_NN`) inside
+// `dir`. Tries `<base>.md` first; falls through to suffix logic on collision.
+// Lives in Rust (OpenOptions::create_new) so concurrent calls can never
+// land on the same filename.
+export async function appendPage(dir: string, base: string): Promise<string> {
+  return await invoke<string>('append_page', { dir, base });
+}
+
+export async function listSections(dir: string): Promise<string[]> {
+  return await invoke<string[]>('list_sections', { dir });
+}
+
+export async function createSection(dir: string, name: string): Promise<void> {
+  await invoke('create_section', { dir, name });
+}
+
+export async function renameSection(
   dir: string,
-  date: string,
-): Promise<string> {
-  return await invoke<string>('append_today_page', { dir, date });
+  oldName: string,
+  newName: string,
+): Promise<void> {
+  await invoke('rename_section', { dir, oldName, newName });
+}
+
+export async function deleteSection(sectionPath: string): Promise<void> {
+  await invoke('delete_section', { sectionPath });
+}
+
+export async function renameJournalFile(
+  oldPath: string,
+  newPath: string,
+): Promise<void> {
+  await invoke('rename_journal_file', { oldPath, newPath });
+}
+
+// Returns the directory portion of a path, computed locally so we don't
+// round-trip to Rust just to strip the last segment.
+export function dirname(path: string): string {
+  const m = /^(.*)[\\/][^\\/]+$/.exec(path);
+  return m === null ? path : (m[1] ?? '');
+}
+
+export function basename(path: string): string {
+  const m = /[\\/]([^\\/]+)$/.exec(path);
+  return m === null ? path : (m[1] ?? '');
 }
 
 // Cross-platform path join. The journal dir comes from the OS picker so its

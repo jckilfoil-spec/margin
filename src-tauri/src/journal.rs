@@ -1,14 +1,42 @@
 // Journal-file IO commands.
 //
-// We deliberately bypass tauri-plugin-fs for the journal directory: the
-// folder is user-chosen at runtime, and granting plugin-fs scope to an
-// arbitrary path is more ceremony than the four primitives we actually need.
-// Every command takes an absolute path string and returns a String error so
-// the frontend can surface it.
+// Sections are subdirectories under journalDir; pages are .md files inside
+// either the journal root (the virtual "Daily" group) or a section. Every
+// command takes absolute path strings and returns String errors so the
+// frontend can surface them.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
+
+// Names entered by the user (sections, pages) must be safe to use as
+// filesystem names: no separators, no traversal, not hidden, length-bounded.
+fn validate_name(name: &str) -> Result<&str, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("name cannot be empty".into());
+    }
+    if trimmed.chars().count() > 100 {
+        return Err("name is too long (max 100 characters)".into());
+    }
+    if trimmed.contains('/') || trimmed.contains('\\') {
+        return Err("name cannot contain '/' or '\\\\'".into());
+    }
+    if trimmed.starts_with('.') {
+        return Err("name cannot start with '.'".into());
+    }
+    if trimmed == "." || trimmed == ".." {
+        return Err("name cannot be '.' or '..'".into());
+    }
+    // Reject control characters and Windows-illegal chars.
+    if trimmed
+        .chars()
+        .any(|c| c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*'))
+    {
+        return Err("name contains an illegal character".into());
+    }
+    Ok(trimmed)
+}
 
 #[tauri::command]
 pub fn list_journal_files(dir: String) -> Result<Vec<String>, String> {
@@ -36,6 +64,94 @@ pub fn list_journal_files(dir: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+pub fn list_sections(dir: String) -> Result<Vec<String>, String> {
+    let path = Path::new(&dir);
+    if !path.is_dir() {
+        return Ok(vec![]);
+    }
+    let mut sections: Vec<String> = Vec::new();
+    for entry in fs::read_dir(path).map_err(|e| format!("read_dir failed: {e}"))? {
+        let entry = entry.map_err(|e| format!("read_dir entry failed: {e}"))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("file_type failed: {e}"))?;
+        if !file_type.is_dir() {
+            continue;
+        }
+        if let Some(name) = entry.file_name().to_str() {
+            // Hidden directories (".margin", ".git", etc.) aren't sections.
+            if name.starts_with('.') {
+                continue;
+            }
+            sections.push(name.to_string());
+        }
+    }
+    sections.sort();
+    Ok(sections)
+}
+
+#[tauri::command]
+pub fn create_section(dir: String, name: String) -> Result<(), String> {
+    let clean = validate_name(&name)?;
+    let path = Path::new(&dir).join(clean);
+    if path.exists() {
+        return Err(format!("section already exists: {clean}"));
+    }
+    fs::create_dir(&path).map_err(|e| format!("create_dir failed: {e}"))
+}
+
+#[tauri::command]
+pub fn rename_section(
+    dir: String,
+    old_name: String,
+    new_name: String,
+) -> Result<(), String> {
+    let clean_new = validate_name(&new_name)?;
+    let dir_path = Path::new(&dir);
+    let old_path = dir_path.join(old_name.trim());
+    let new_path = dir_path.join(clean_new);
+    if !old_path.is_dir() {
+        return Err(format!("section does not exist: {}", old_name.trim()));
+    }
+    if old_path == new_path {
+        return Ok(());
+    }
+    if new_path.exists() {
+        return Err(format!("section already exists: {clean_new}"));
+    }
+    fs::rename(&old_path, &new_path).map_err(|e| format!("rename failed: {e}"))
+}
+
+#[tauri::command]
+pub fn delete_section(section_path: String) -> Result<(), String> {
+    let path = Path::new(&section_path);
+    if !path.is_dir() {
+        // Idempotent: already gone is the desired post-state.
+        return Ok(());
+    }
+    fs::remove_dir_all(path).map_err(|e| format!("remove_dir_all failed: {e}"))
+}
+
+#[tauri::command]
+pub fn rename_journal_file(
+    old_path: String,
+    new_path: String,
+) -> Result<(), String> {
+    let old = Path::new(&old_path);
+    let new = Path::new(&new_path);
+    if !old.is_file() {
+        return Err(format!("not a file: {old_path}"));
+    }
+    if old == new {
+        return Ok(());
+    }
+    if new.exists() {
+        return Err(format!("destination already exists: {new_path}"));
+    }
+    fs::rename(old, new).map_err(|e| format!("rename failed: {e}"))
+}
+
+#[tauri::command]
 pub fn read_journal_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("read_to_string failed: {e}"))
 }
@@ -60,9 +176,7 @@ pub fn ensure_journal_dir(path: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn delete_journal_file(path: String) -> Result<(), String> {
-    // Idempotent: a NotFound error means the goal state (file gone) is
-    // already met, so we report success. Any other error (permissions,
-    // IO) bubbles up.
+    // Idempotent: NotFound is success.
     match fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -70,25 +184,46 @@ pub fn delete_journal_file(path: String) -> Result<(), String> {
     }
 }
 
-/// Atomically allocate the next "_NN" page for `date` inside `dir` and
-/// return its filename.
+/// Atomically allocate the next page named with `base` inside `dir`.
 ///
-/// The whole allocation lives in Rust so concurrent clicks can't collide:
-/// `OpenOptions::create_new(true)` maps to `O_CREAT | O_EXCL` on POSIX and
-/// `CREATE_NEW` on Windows — both OS-level atomic. If two callers compute
-/// the same next suffix, only one's create succeeds; the other catches
-/// `AlreadyExists` and bumps. We start the search at (max-existing-suffix
-/// + 1) so callers always go *past* the highest seen page rather than
-/// filling in gaps.
+/// Tries to create `<base>.md` first; if that exists, finds the highest
+/// existing `<base>_NN.md` suffix and creates `<base>_<NN+1>.md`.
+/// `OpenOptions::create_new(true)` is the OS-level atomic primitive
+/// (`O_CREAT | O_EXCL` on POSIX, `CREATE_NEW` on Windows), so concurrent
+/// callers can never land on the same filename — the loser sees
+/// `AlreadyExists`, bumps, and retries.
 #[tauri::command]
-pub fn append_today_page(dir: String, date: String) -> Result<String, String> {
+pub fn append_page(dir: String, base: String) -> Result<String, String> {
     let dir_path = Path::new(&dir);
     if !dir_path.is_dir() {
         return Err(format!("dir does not exist: {dir}"));
     }
 
-    let prefix = format!("{date}_");
+    // First try `<base>.md` itself.
+    let base_filename = format!("{base}.md");
+    let base_path = dir_path.join(&base_filename);
+    match OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&base_path)
+    {
+        Ok(mut file) => {
+            let header = format!("# {base}\n\n");
+            if let Err(e) = file.write_all(header.as_bytes()) {
+                drop(file);
+                let _ = fs::remove_file(&base_path);
+                return Err(format!("write failed: {e}"));
+            }
+            return Ok(base_filename);
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            // Fall through to suffix logic.
+        }
+        Err(e) => return Err(format!("create_new failed: {e}")),
+    }
 
+    // Find the max existing `<base>_NN` suffix.
+    let prefix = format!("{base}_");
     let mut max_suffix: u32 = 0;
     for entry in fs::read_dir(dir_path).map_err(|e| format!("read_dir failed: {e}"))? {
         let entry = entry.map_err(|e| format!("read_dir entry failed: {e}"))?;
@@ -113,7 +248,7 @@ pub fn append_today_page(dir: String, date: String) -> Result<String, String> {
 
     let mut next = max_suffix.saturating_add(1);
     for _ in 0..1000u32 {
-        let stem = format!("{date}_{:02}", next);
+        let stem = format!("{base}_{:02}", next);
         let name = format!("{stem}.md");
         let path = dir_path.join(&name);
         match OpenOptions::new()
@@ -137,7 +272,7 @@ pub fn append_today_page(dir: String, date: String) -> Result<String, String> {
             Err(e) => return Err(format!("create_new failed: {e}")),
         }
     }
-    Err("ran out of attempts to allocate a new page suffix".into())
+    Err("ran out of attempts to allocate a new page".into())
 }
 
 #[cfg(test)]
@@ -207,29 +342,179 @@ mod tests {
     fn delete_missing_file_is_a_no_op() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("nope.md");
-        // Already-gone is a valid post-state — must not error.
         delete_journal_file(path.to_string_lossy().into()).unwrap();
     }
 
     #[test]
-    fn append_creates_first_page_as_01() {
+    fn list_sections_returns_subdir_names_sorted() {
         let tmp = tempfile::tempdir().unwrap();
-        let name = append_today_page(
+        fs::create_dir(tmp.path().join("Projects")).unwrap();
+        fs::create_dir(tmp.path().join("Recipes")).unwrap();
+        fs::create_dir(tmp.path().join(".hidden")).unwrap();
+        fs::write(tmp.path().join("loose.md"), "x").unwrap();
+
+        let sections = list_sections(tmp.path().to_string_lossy().into()).unwrap();
+        assert_eq!(sections, vec!["Projects".to_string(), "Recipes".to_string()]);
+    }
+
+    #[test]
+    fn create_section_makes_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        create_section(
+            tmp.path().to_string_lossy().into(),
+            "Projects".into(),
+        )
+        .unwrap();
+        assert!(tmp.path().join("Projects").is_dir());
+    }
+
+    #[test]
+    fn create_section_errors_when_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join("Projects")).unwrap();
+        let err = create_section(
+            tmp.path().to_string_lossy().into(),
+            "Projects".into(),
+        )
+        .unwrap_err();
+        assert!(err.contains("already exists"));
+    }
+
+    #[test]
+    fn create_section_rejects_path_separators() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = create_section(
+            tmp.path().to_string_lossy().into(),
+            "../escape".into(),
+        )
+        .unwrap_err();
+        assert!(err.contains("'.'") || err.contains("'/'"));
+    }
+
+    #[test]
+    fn rename_section_renames_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join("Old")).unwrap();
+        fs::write(tmp.path().join("Old").join("page.md"), "x").unwrap();
+
+        rename_section(
+            tmp.path().to_string_lossy().into(),
+            "Old".into(),
+            "New".into(),
+        )
+        .unwrap();
+
+        assert!(!tmp.path().join("Old").exists());
+        assert!(tmp.path().join("New").join("page.md").is_file());
+    }
+
+    #[test]
+    fn rename_section_errors_when_target_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join("A")).unwrap();
+        fs::create_dir(tmp.path().join("B")).unwrap();
+        let err = rename_section(
+            tmp.path().to_string_lossy().into(),
+            "A".into(),
+            "B".into(),
+        )
+        .unwrap_err();
+        assert!(err.contains("already exists"));
+    }
+
+    #[test]
+    fn delete_section_removes_recursively() {
+        let tmp = tempfile::tempdir().unwrap();
+        let section = tmp.path().join("Doomed");
+        fs::create_dir(&section).unwrap();
+        fs::write(section.join("a.md"), "x").unwrap();
+        fs::write(section.join("b.md"), "y").unwrap();
+
+        delete_section(section.to_string_lossy().into()).unwrap();
+        assert!(!section.exists());
+    }
+
+    #[test]
+    fn delete_section_missing_is_a_no_op() {
+        let tmp = tempfile::tempdir().unwrap();
+        delete_section(tmp.path().join("nope").to_string_lossy().into()).unwrap();
+    }
+
+    #[test]
+    fn rename_journal_file_moves_the_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let old = tmp.path().join("old.md");
+        let new = tmp.path().join("new.md");
+        fs::write(&old, "body").unwrap();
+
+        rename_journal_file(
+            old.to_string_lossy().into(),
+            new.to_string_lossy().into(),
+        )
+        .unwrap();
+
+        assert!(!old.exists());
+        assert_eq!(fs::read_to_string(&new).unwrap(), "body");
+    }
+
+    #[test]
+    fn rename_journal_file_errors_if_destination_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let a = tmp.path().join("a.md");
+        let b = tmp.path().join("b.md");
+        fs::write(&a, "x").unwrap();
+        fs::write(&b, "y").unwrap();
+        let err = rename_journal_file(
+            a.to_string_lossy().into(),
+            b.to_string_lossy().into(),
+        )
+        .unwrap_err();
+        assert!(err.contains("already exists"));
+    }
+
+    #[test]
+    fn rename_journal_file_errors_if_source_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = rename_journal_file(
+            tmp.path().join("nope.md").to_string_lossy().into(),
+            tmp.path().join("dest.md").to_string_lossy().into(),
+        )
+        .unwrap_err();
+        assert!(err.contains("not a file"));
+    }
+
+    #[test]
+    fn append_creates_base_when_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let name = append_page(
+            tmp.path().to_string_lossy().into(),
+            "untitled".into(),
+        )
+        .unwrap();
+        assert_eq!(name, "untitled.md");
+        let body = fs::read_to_string(tmp.path().join(&name)).unwrap();
+        assert_eq!(body, "# untitled\n\n");
+    }
+
+    #[test]
+    fn append_creates_01_when_base_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("2026-05-09.md"), "x").unwrap();
+        let name = append_page(
             tmp.path().to_string_lossy().into(),
             "2026-05-09".into(),
         )
         .unwrap();
         assert_eq!(name, "2026-05-09_01.md");
-        let body = fs::read_to_string(tmp.path().join(&name)).unwrap();
-        assert_eq!(body, "# 2026-05-09_01\n\n");
     }
 
     #[test]
-    fn append_increments_past_existing_max() {
+    fn append_increments_past_existing_max_suffix() {
         let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("2026-05-09.md"), "x").unwrap();
         fs::write(tmp.path().join("2026-05-09_01.md"), "x").unwrap();
         fs::write(tmp.path().join("2026-05-09_02.md"), "x").unwrap();
-        let name = append_today_page(
+        let name = append_page(
             tmp.path().to_string_lossy().into(),
             "2026-05-09".into(),
         )
@@ -240,8 +525,9 @@ mod tests {
     #[test]
     fn append_goes_past_max_even_with_gaps() {
         let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("2026-05-09.md"), "x").unwrap();
         fs::write(tmp.path().join("2026-05-09_05.md"), "x").unwrap();
-        let name = append_today_page(
+        let name = append_page(
             tmp.path().to_string_lossy().into(),
             "2026-05-09".into(),
         )
@@ -250,22 +536,21 @@ mod tests {
     }
 
     #[test]
-    fn append_ignores_other_dates_and_the_base_file() {
+    fn append_ignores_other_bases() {
         let tmp = tempfile::tempdir().unwrap();
-        fs::write(tmp.path().join("2026-05-09.md"), "x").unwrap();
         fs::write(tmp.path().join("2026-05-08_05.md"), "x").unwrap();
-        let name = append_today_page(
+        let name = append_page(
             tmp.path().to_string_lossy().into(),
             "2026-05-09".into(),
         )
         .unwrap();
-        assert_eq!(name, "2026-05-09_01.md");
+        assert_eq!(name, "2026-05-09.md");
     }
 
     #[test]
     fn append_errors_when_dir_missing() {
-        let err = append_today_page(
-            "C:/definitely/not/a/real/path/append_today_page".into(),
+        let err = append_page(
+            "C:/definitely/not/a/real/path/append_page".into(),
             "2026-05-09".into(),
         )
         .unwrap_err();
@@ -285,7 +570,7 @@ mod tests {
             .map(|_| {
                 let dir = dir.clone();
                 thread::spawn(move || {
-                    append_today_page(dir, "2026-05-09".into()).unwrap()
+                    append_page(dir, "2026-05-09".into()).unwrap()
                 })
             })
             .collect();

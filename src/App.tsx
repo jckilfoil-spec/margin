@@ -32,9 +32,9 @@ function describeError(e: unknown): string {
 
 export function App(): JSX.Element {
   const journalDir = useMargin((s) => s.journalDir);
-  const activeFilename = useMargin((s) => s.activeFilename);
+  const activePath = useMargin((s) => s.activePath);
   const setJournalDirState = useMargin((s) => s.setJournalDir);
-  const setActiveFilename = useMargin((s) => s.setActiveFilename);
+  const setActivePath = useMargin((s) => s.setActivePath);
   const bumpRefresh = useMargin((s) => s.bumpRefresh);
 
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -57,9 +57,8 @@ export function App(): JSX.Element {
     const a = activeRef.current;
     const md = pendingMd.current;
     if (a === null || md === null) return;
-    // If the file was deleted out from under us (e.g., the user removed it
-    // from the sidebar while a save was pending), drop the save instead of
-    // recreating the file via writeJournalFile's implicit create.
+    // If the file was deleted/renamed out from under us, drop the save
+    // instead of recreating the file via writeJournalFile's implicit create.
     if (!(await journalFileExists(a.path))) {
       pendingMd.current = null;
       return;
@@ -104,45 +103,46 @@ export function App(): JSX.Element {
     };
   }, [setJournalDirState]);
 
-  // 2) Default activeFilename to today once a journalDir is set.
+  // 2) Default activePath to today's file at the journalDir root once we
+  // have a journalDir.
   useEffect(() => {
     if (journalDir === null) return;
-    if (activeFilename !== null) return;
-    setActiveFilename(todayJournalName());
-  }, [journalDir, activeFilename, setActiveFilename]);
+    if (activePath !== null) return;
+    setActivePath(joinPath(journalDir, todayJournalName()));
+  }, [journalDir, activePath, setActivePath]);
 
-  // 3) When journalDir + activeFilename are set, load the file (creating
-  // today's on demand). Flushes any pending save first so switching from
-  // a draft doesn't lose keystrokes.
+  // 3) Load the file at activePath. If it's today's root-level file and
+  // doesn't exist, create it; for any other missing file, surface an
+  // error (the user likely renamed/deleted it elsewhere).
   useEffect(() => {
-    if (journalDir === null || activeFilename === null) return undefined;
+    if (journalDir === null || activePath === null) return undefined;
     let cancelled = false;
     void (async () => {
       try {
         await flush();
         await ensureJournalDir(journalDir);
-        const path = joinPath(journalDir, activeFilename);
-        const isToday = activeFilename === todayJournalName();
-        const exists = await journalFileExists(path);
+        const isTodayRoot =
+          activePath === joinPath(journalDir, todayJournalName());
+        const exists = await journalFileExists(activePath);
         if (!exists) {
-          if (!isToday) {
-            throw new Error(`File not found: ${activeFilename}`);
+          if (!isTodayRoot) {
+            throw new Error(`File not found: ${activePath}`);
           }
-          await writeJournalFile(path, `${todayHeader()}\n\n`);
+          await writeJournalFile(activePath, `${todayHeader()}\n\n`);
           bumpRefresh();
         }
-        const content = await readJournalFile(path);
+        const content = await readJournalFile(activePath);
         if (cancelled) return;
-        setActive({ path, initialMarkdown: content });
+        setActive({ path: activePath, initialMarkdown: content });
       } catch (e) {
         if (cancelled) return;
-        setError(`Could not open ${activeFilename}: ${describeError(e)}`);
+        setError(`Could not open ${activePath}: ${describeError(e)}`);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [journalDir, activeFilename, bumpRefresh, flush]);
+  }, [journalDir, activePath, bumpRefresh, flush]);
 
   // 4) Best-effort flush on window blur — covers most close paths without
   // an onCloseRequested handler (which hangs the X on Windows).
