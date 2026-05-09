@@ -6,7 +6,8 @@
 // Every command takes an absolute path string and returns a String error so
 // the frontend can surface it.
 
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::Path;
 
 #[tauri::command]
@@ -59,7 +60,84 @@ pub fn ensure_journal_dir(path: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn delete_journal_file(path: String) -> Result<(), String> {
-    fs::remove_file(&path).map_err(|e| format!("remove_file failed: {e}"))
+    // Idempotent: a NotFound error means the goal state (file gone) is
+    // already met, so we report success. Any other error (permissions,
+    // IO) bubbles up.
+    match fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("remove_file failed: {e}")),
+    }
+}
+
+/// Atomically allocate the next "_NN" page for `date` inside `dir` and
+/// return its filename.
+///
+/// The whole allocation lives in Rust so concurrent clicks can't collide:
+/// `OpenOptions::create_new(true)` maps to `O_CREAT | O_EXCL` on POSIX and
+/// `CREATE_NEW` on Windows — both OS-level atomic. If two callers compute
+/// the same next suffix, only one's create succeeds; the other catches
+/// `AlreadyExists` and bumps. We start the search at (max-existing-suffix
+/// + 1) so callers always go *past* the highest seen page rather than
+/// filling in gaps.
+#[tauri::command]
+pub fn append_today_page(dir: String, date: String) -> Result<String, String> {
+    let dir_path = Path::new(&dir);
+    if !dir_path.is_dir() {
+        return Err(format!("dir does not exist: {dir}"));
+    }
+
+    let prefix = format!("{date}_");
+
+    let mut max_suffix: u32 = 0;
+    for entry in fs::read_dir(dir_path).map_err(|e| format!("read_dir failed: {e}"))? {
+        let entry = entry.map_err(|e| format!("read_dir entry failed: {e}"))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("file_type failed: {e}"))?;
+        if !file_type.is_file() {
+            continue;
+        }
+        if let Some(name) = entry.file_name().to_str() {
+            if !name.ends_with(".md") || !name.starts_with(&prefix) {
+                continue;
+            }
+            let middle = &name[prefix.len()..name.len() - 3];
+            if let Ok(n) = middle.parse::<u32>() {
+                if n > max_suffix {
+                    max_suffix = n;
+                }
+            }
+        }
+    }
+
+    let mut next = max_suffix.saturating_add(1);
+    for _ in 0..1000u32 {
+        let stem = format!("{date}_{:02}", next);
+        let name = format!("{stem}.md");
+        let path = dir_path.join(&name);
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut file) => {
+                let header = format!("# {stem}\n\n");
+                if let Err(e) = file.write_all(header.as_bytes()) {
+                    drop(file);
+                    let _ = fs::remove_file(&path);
+                    return Err(format!("write failed: {e}"));
+                }
+                return Ok(name);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                next = next.saturating_add(1);
+                continue;
+            }
+            Err(e) => return Err(format!("create_new failed: {e}")),
+        }
+    }
+    Err("ran out of attempts to allocate a new page suffix".into())
 }
 
 #[cfg(test)]
@@ -126,10 +204,95 @@ mod tests {
     }
 
     #[test]
-    fn delete_missing_file_errors() {
+    fn delete_missing_file_is_a_no_op() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("nope.md");
-        let err = delete_journal_file(path.to_string_lossy().into()).unwrap_err();
-        assert!(err.contains("remove_file failed"));
+        // Already-gone is a valid post-state — must not error.
+        delete_journal_file(path.to_string_lossy().into()).unwrap();
+    }
+
+    #[test]
+    fn append_creates_first_page_as_01() {
+        let tmp = tempfile::tempdir().unwrap();
+        let name = append_today_page(
+            tmp.path().to_string_lossy().into(),
+            "2026-05-09".into(),
+        )
+        .unwrap();
+        assert_eq!(name, "2026-05-09_01.md");
+        let body = fs::read_to_string(tmp.path().join(&name)).unwrap();
+        assert_eq!(body, "# 2026-05-09_01\n\n");
+    }
+
+    #[test]
+    fn append_increments_past_existing_max() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("2026-05-09_01.md"), "x").unwrap();
+        fs::write(tmp.path().join("2026-05-09_02.md"), "x").unwrap();
+        let name = append_today_page(
+            tmp.path().to_string_lossy().into(),
+            "2026-05-09".into(),
+        )
+        .unwrap();
+        assert_eq!(name, "2026-05-09_03.md");
+    }
+
+    #[test]
+    fn append_goes_past_max_even_with_gaps() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("2026-05-09_05.md"), "x").unwrap();
+        let name = append_today_page(
+            tmp.path().to_string_lossy().into(),
+            "2026-05-09".into(),
+        )
+        .unwrap();
+        assert_eq!(name, "2026-05-09_06.md");
+    }
+
+    #[test]
+    fn append_ignores_other_dates_and_the_base_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("2026-05-09.md"), "x").unwrap();
+        fs::write(tmp.path().join("2026-05-08_05.md"), "x").unwrap();
+        let name = append_today_page(
+            tmp.path().to_string_lossy().into(),
+            "2026-05-09".into(),
+        )
+        .unwrap();
+        assert_eq!(name, "2026-05-09_01.md");
+    }
+
+    #[test]
+    fn append_errors_when_dir_missing() {
+        let err = append_today_page(
+            "C:/definitely/not/a/real/path/append_today_page".into(),
+            "2026-05-09".into(),
+        )
+        .unwrap_err();
+        assert!(err.contains("dir does not exist"));
+    }
+
+    #[test]
+    fn concurrent_appends_produce_distinct_filenames() {
+        use std::collections::HashSet;
+        use std::thread;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let dir: String = tmp.path().to_string_lossy().into();
+        let n_threads = 8;
+
+        let handles: Vec<_> = (0..n_threads)
+            .map(|_| {
+                let dir = dir.clone();
+                thread::spawn(move || {
+                    append_today_page(dir, "2026-05-09".into()).unwrap()
+                })
+            })
+            .collect();
+
+        let names: Vec<String> =
+            handles.into_iter().map(|h| h.join().unwrap()).collect();
+        let unique: HashSet<_> = names.iter().cloned().collect();
+        assert_eq!(unique.len(), n_threads, "got duplicates: {names:?}");
     }
 }

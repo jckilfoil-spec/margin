@@ -2,18 +2,13 @@ import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { confirm } from '@tauri-apps/plugin-dialog';
 
-import {
-  nextPageFilename,
-  todayDateString,
-  todayJournalName,
-} from '../lib/dates';
+import { todayDateString, todayJournalName } from '../lib/dates';
 import { groupByMonth } from '../lib/sidebar';
 import {
+  appendTodayPage,
   deleteJournalFile,
   joinPath,
-  journalFileExists,
   listJournalFiles,
-  writeJournalFile,
 } from '../lib/storage';
 import { useMargin } from '../store';
 
@@ -45,21 +40,11 @@ export function Sidebar(): JSX.Element {
     if (journalDir === null || busy) return;
     setBusy(true);
     try {
-      const today = todayDateString();
-      // Re-list so we see any concurrent additions / external changes.
-      let existing = await listJournalFiles(journalDir);
-      let next = nextPageFilename(existing, today);
-      let path = joinPath(journalDir, next);
-      // Tight retry to dodge a race where the computed name was just used.
-      for (let i = 0; i < 5; i++) {
-        if (!(await journalFileExists(path))) break;
-        existing = [...existing, next];
-        next = nextPageFilename(existing, today);
-        path = joinPath(journalDir, next);
-      }
-      await writeJournalFile(path, `# ${next.slice(0, -3)}\n\n`);
+      // Single Rust call: lists, picks next free _NN, atomic create, returns
+      // the new filename. Concurrent clicks can't collide.
+      const filename = await appendTodayPage(journalDir, todayDateString());
       bumpRefresh();
-      setActiveFilename(next);
+      setActiveFilename(filename);
     } finally {
       setBusy(false);
     }

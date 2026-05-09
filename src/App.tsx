@@ -57,6 +57,13 @@ export function App(): JSX.Element {
     const a = activeRef.current;
     const md = pendingMd.current;
     if (a === null || md === null) return;
+    // If the file was deleted out from under us (e.g., the user removed it
+    // from the sidebar while a save was pending), drop the save instead of
+    // recreating the file via writeJournalFile's implicit create.
+    if (!(await journalFileExists(a.path))) {
+      pendingMd.current = null;
+      return;
+    }
     pendingMd.current = null;
     await writeJournalFile(a.path, md);
   }, []);

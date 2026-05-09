@@ -27,6 +27,16 @@ export async function deleteJournalFile(path: string): Promise<void> {
   await invoke('delete_journal_file', { path });
 }
 
+// Atomically allocates the next "_NN" page for `date` inside `dir`. The
+// allocation lives in Rust (OpenOptions::create_new) so concurrent calls
+// can never collide on a filename. Returns the created filename.
+export async function appendTodayPage(
+  dir: string,
+  date: string,
+): Promise<string> {
+  return await invoke<string>('append_today_page', { dir, date });
+}
+
 // Cross-platform path join. The journal dir comes from the OS picker so its
 // own separator is the source of truth — we only fall back to '/' if the path
 // somehow has neither.
