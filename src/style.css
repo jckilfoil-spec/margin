@@ -1,0 +1,932 @@
+/*
+ * margin — design tokens + paper aesthetic.
+ *
+ * Tokens are defined once on :root. Use var(--token); never introduce a new
+ * literal pixel/color value without a matching token. See DESIGN.md.
+ */
+
+:root {
+  /* Paper */
+  --paper:        #fbfaf5;
+  --paper-edge:   #f3f1e9;
+  --rule:         rgba(20, 50, 120, 0.10);
+  --margin:       rgba(180, 40, 40, 0.28);
+
+  /* Ink */
+  --ink:          #1a1a1a;
+  --ink-dim:      #5a5a5a;
+  --ink-soft:     #9a9a9a;
+
+  /* Accent */
+  --accent:       #2a5fb8;
+  --accent-soft:  rgba(42, 95, 184, 0.12);
+
+  /* Spacing (12 steps) */
+  --space-1:  4px;
+  --space-2:  6px;
+  --space-3:  8px;
+  --space-4:  10px;
+  --space-5:  12px;
+  --space-6:  14px;
+  --space-7:  18px;
+  --space-8:  22px;
+  --space-9:  28px;
+  --space-10: 32px;
+  --space-11: 36px;
+  --space-12: 56px;
+
+  /* Type scale */
+  --text-xs:   11px;
+  --text-sm:   12px;
+  --text-md:   13px;
+  --text-base: 14px;
+  --text-body: 16px;
+  --text-lg:   18px;
+  --text-xl:   20px;
+  --text-2xl:  24px;
+  --text-3xl:  28px;
+
+  /* The single most important number in this app. */
+  --line-height: 28px;
+
+  /* Layout */
+  --margin-x:  80px;
+  --sidebar-w: 200px;
+  --content-max: 760px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Motion */
+  --motion-fast:  0.15s ease;
+  --motion-base:  0.20s ease;
+  --motion-check: 0.16s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Reset — minimal, intentional. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+  font-size: var(--text-body);
+  line-height: var(--line-height);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/*
+ * .paper-surface — the editor canvas.
+ *
+ * Two layered backgrounds:
+ *   1. Horizontal rules every --line-height (faint blue).
+ *   2. A vertical red margin line at --margin-x from the left edge.
+ *
+ * Padding pushes content past the red margin line. The 6px y-offset on the
+ * rule pattern sits the text baseline ON the rule once Inter is loaded —
+ * fine-tune by ±2px in PR 2 with the real editor mounted.
+ */
+.paper-surface {
+  min-height: 100%;
+  width: 100%;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(
+      to bottom,
+      transparent calc(var(--line-height) - 1px),
+      var(--rule) calc(var(--line-height) - 1px),
+      var(--rule) var(--line-height)
+    ),
+    linear-gradient(
+      to right,
+      transparent var(--margin-x),
+      var(--margin) var(--margin-x),
+      var(--margin) calc(var(--margin-x) + 1px),
+      transparent calc(var(--margin-x) + 1px)
+    );
+  background-size:
+    100% var(--line-height),
+    100% 100%;
+  /*
+   * Rules land at the body-text baseline so glyphs sit ON the line, like
+   * the brand icon. Segoe UI and Inter both put the baseline ~20px below
+   * the line-top at font-size 16 / line-height 28. With padding-top 28,
+   * line 1's baseline is at y=48 — background-position 0 21px puts the
+   * gradient's bottom-1px rule there. Rules then march down at 76, 104, ...
+   * H1 (24px) is the deliberate exception — its larger glyphs poke past.
+   */
+  background-position: 0 21px;
+  padding: var(--line-height) var(--space-10) var(--space-9)
+    calc(var(--margin-x) + var(--space-7));
+}
+
+/*
+ * .pe-* — paper editor. Keeps every block on the rule grid by anchoring
+ * margins and line-height to --line-height.
+ */
+.pe-content,
+.pe-content > .ProseMirror {
+  outline: none;
+}
+
+.pe-content .ProseMirror > * {
+  margin: 0;
+  line-height: var(--line-height);
+}
+
+.pe-content .ProseMirror p {
+  min-height: var(--line-height);
+}
+
+.pe-content .ProseMirror h1 {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  line-height: var(--line-height);
+}
+
+.pe-content .ProseMirror h2 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: var(--line-height);
+}
+
+.pe-content .ProseMirror h3 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--line-height);
+}
+
+.pe-content .ProseMirror ul,
+.pe-content .ProseMirror ol {
+  padding-left: var(--space-9);
+}
+
+.pe-content .ProseMirror ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.pe-content .ProseMirror code {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  background: rgba(20, 50, 120, 0.06);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.pe-content .ProseMirror blockquote {
+  border-left: 2px solid var(--ink-soft);
+  padding-left: var(--space-5);
+  color: var(--ink-dim);
+}
+
+.pe-error {
+  position: fixed;
+  top: var(--space-5);
+  right: var(--space-5);
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  background: var(--paper-edge);
+  border: 1px solid var(--ink-soft);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  max-width: 360px;
+  z-index: 5;
+}
+
+/*
+ * .mdl-* — modal scrim + card. Used by FolderPickerModal on first launch.
+ * Single button, single decision: pick a folder.
+ */
+.mdl-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 30, 50, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.mdl {
+  position: relative;
+  background: var(--paper);
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+  padding: var(--space-9) var(--space-10);
+  max-width: 460px;
+  width: calc(100% - var(--space-10));
+}
+
+.mdl-close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.mdl-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink);
+}
+
+.mdl-title {
+  margin: 0 0 var(--space-5) 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: var(--line-height);
+}
+
+.mdl-body {
+  margin: 0 0 var(--space-7) 0;
+  color: var(--ink-dim);
+  font-size: var(--text-base);
+  line-height: var(--line-height);
+}
+
+.mdl-error {
+  margin: 0 0 var(--space-5) 0;
+  color: #b22020;
+  font-size: var(--text-sm);
+}
+
+/*
+ * Buttons. Pill ghost by default; .btn-primary fills with ink.
+ */
+.btn {
+  font-family: inherit;
+  font-size: var(--text-base);
+  padding: var(--space-3) var(--space-7);
+  border: 1px solid var(--ink-soft);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast),
+    border-color var(--motion-fast);
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.btn-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #000;
+}
+
+/*
+ * .app-shell — main layout: fixed sidebar on the left, paper on the right.
+ * Position: relative so the floating prompt button anchors here.
+ */
+.app-shell {
+  position: relative;
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.app-shell > .paper-surface {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sb-shell {
+  width: var(--sidebar-w);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-edge);
+  border-right: 1px solid #e6e3d8;
+  min-height: 0;
+}
+
+/*
+ * .sb-* — sidebar. Top: "+ New section" inline link. Then a virtual
+ * "Daily" group for journalDir-root .md files (uneditable header, "+"
+ * adds a today-named page). Then user-created sections, each a real
+ * subdirectory with full rename / delete via the pencil icon.
+ */
+.sb {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-4);
+}
+
+.sb-add-section {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-7);
+  background: transparent;
+  border: 0;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--motion-fast), background var(--motion-fast);
+}
+
+.sb-add-section:hover:not(:disabled) {
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.sb-add-section:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sb-new-section {
+  margin-bottom: var(--space-7);
+  padding: 0 var(--space-3);
+}
+
+.sb-empty {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+
+.sb-section {
+  margin: 0 0 var(--space-9) 0;
+}
+
+.sb-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-2);
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--paper-edge);
+  position: relative;
+}
+
+.sb-section-name {
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sb-section-actions {
+  display: flex;
+  gap: var(--space-1);
+  opacity: 0;
+  transition: opacity var(--motion-fast);
+}
+
+.sb-section-header:hover .sb-section-actions,
+.sb-section-header:focus-within .sb-section-actions {
+  opacity: 1;
+}
+
+.sb-pages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sb-page-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sb-page {
+  flex: 1;
+  text-align: left;
+  /* Indented from the section name; right padding leaves room for the
+   * pencil button (revealed on hover). */
+  padding: var(--space-2) calc(var(--space-7) + var(--space-1)) var(--space-2)
+    var(--space-7);
+  font-size: var(--text-base);
+  color: var(--ink-dim);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.sb-page:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--ink);
+}
+
+.sb-page.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.sb-row-edit {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex: none;
+  transition:
+    opacity var(--motion-fast),
+    background var(--motion-fast),
+    color var(--motion-fast);
+}
+
+.sb-row-edit:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink);
+}
+
+.sb-row-edit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Page-row pencil only appears on hover/focus to keep the rail quiet. */
+.sb-page-row .sb-row-edit {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+}
+
+.sb-page-row:hover .sb-row-edit,
+.sb-page-row:focus-within .sb-row-edit {
+  opacity: 1;
+}
+
+.sb-empty {
+  margin: var(--space-2) var(--space-7);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+
+/*
+ * .ef-* — inline edit field used by sections and pages. Save / cancel /
+ * (optional) delete buttons sit alongside the input so the row never
+ * jumps height when entering edit mode.
+ */
+.ef {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  width: 100%;
+  padding: var(--space-1) 0;
+}
+
+.ef-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-size: var(--text-base);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.ef-input:focus {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.ef-input:disabled {
+  opacity: 0.6;
+}
+
+.ef-btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--ink-soft);
+  flex: none;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.ef-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.ef-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ef-save:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.ef-delete:hover:not(:disabled) {
+  color: #b22020;
+}
+
+.ef-error {
+  flex: 0 0 100%;
+  font-size: var(--text-xs);
+  color: #b22020;
+  padding-left: var(--space-3);
+}
+
+.sb-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid #e6e3d8;
+  flex: none;
+}
+
+/*
+ * .um-* — user menu (settings cog) + settings modal contents.
+ */
+.um-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-dim);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  flex: none;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.um-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink);
+}
+
+.um-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin-bottom: var(--space-7);
+}
+
+.um-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.um-label {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-dim);
+}
+
+.um-value {
+  margin: var(--space-1) 0 0 0;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.um-divider {
+  border: 0;
+  border-top: 1px solid var(--paper-edge);
+  margin: var(--space-7) 0;
+}
+
+.um-meta {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+/*
+ * .pb-* — prompt button. Floats at the top-left of the page (between the
+ * sidebar and the title), pinned via absolute positioning on .app-shell so
+ * editor scrolling doesn't move it. Icon-only by default; hover expands a
+ * pill chip ("Prompt please!") to the right.
+ */
+.pb-btn {
+  position: absolute;
+  top: var(--space-3);
+  left: calc(var(--sidebar-w) + var(--space-3));
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0;
+  background: var(--paper);
+  border: 1px solid var(--ink-soft);
+  border-radius: 999px;
+  color: var(--ink-dim);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    border-color var(--motion-base),
+    color var(--motion-base);
+}
+
+.pb-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+.pb-text {
+  white-space: nowrap;
+  max-width: 0;
+  padding-right: 0;
+  overflow: hidden;
+  transition:
+    max-width var(--motion-base),
+    padding-right var(--motion-base);
+}
+
+.pb-btn:hover:not(:disabled),
+.pb-btn:focus-visible {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.pb-btn:hover:not(:disabled) .pb-text,
+.pb-btn:focus-visible .pb-text {
+  max-width: 200px;
+  padding-right: var(--space-5);
+}
+
+.pb-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/*
+ * .cb-* — chunky checkbox. The signature interaction.
+ *
+ * Layout:
+ *   - .cb-box is absolutely positioned out into the LEFT GUTTER, past
+ *     the red margin rule. Editor content starts at margin-x + space-7
+ *     from the paper-surface left, so a left of -(space-7 + space-3 +
+ *     box-width) puts the box's right edge ~space-3 shy of the margin
+ *     line — the box visibly lives to the left of the margin.
+ *   - .cb-content takes the natural block width: text flows on the
+ *     writing area like any paragraph.
+ *
+ * Geometry:
+ *   - 24x24px box, 2px ink border, 4px radius.
+ *   - 32x32 SVG at top:-4 left:-4 — 4px overflow on every side.
+ *   - Path "M 4 18 L 13 26 L 30 4" with stroke-width 4 + round caps:
+ *     the right cap extends 2px past x=30, hitting the SVG right edge.
+ *     The check visibly spills outside the box — that overflow IS the
+ *     feature.
+ *   - Animation: stroke-dashoffset goes path length → 0 over --motion-check.
+ */
+.cb-li {
+  position: relative;
+  list-style: none;
+  line-height: var(--line-height);
+  margin: 0;
+  padding: 0;
+}
+
+.cb-box {
+  position: absolute;
+  top: 2px;
+  left: calc(-1 * (var(--space-7) + var(--space-3) + 24px));
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  overflow: visible;
+  transition: filter var(--motion-fast);
+}
+
+.cb-box:hover {
+  filter: brightness(0.55);
+}
+
+.cb-box:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cb-svg {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  pointer-events: none;
+}
+
+.cb-path {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke-dashoffset var(--motion-check);
+}
+
+.cb-li[data-checked='true'] .cb-content {
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-soft);
+  color: var(--ink-dim);
+}
+
+/*
+ * .tu-* — update toast. Fixed to the bottom-right corner of the window.
+ * Appears when a newer signed release is available. Fades + slides in over
+ * --motion-base to match the chunky-checkbox motion vocabulary.
+ * Z-index 100: above editor (5), below modals (200+).
+ */
+@keyframes tu-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tu-toast {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 320px;
+  padding: var(--space-5) var(--space-7);
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  animation: tu-slide-in var(--motion-base) both;
+}
+
+.tu-body {
+  margin: 0 0 var(--space-3) 0;
+  font-size: var(--text-body);
+  color: var(--ink);
+  line-height: var(--line-height);
+}
+
+.tu-body:last-child {
+  margin-bottom: 0;
+}
+
+.tu-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+}
+
+.tu-link {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-decoration: none;
+  transition: text-decoration var(--motion-fast);
+}
+
+.tu-link:hover {
+  text-decoration: underline;
+}
+
+.tu-link-primary {
+  font-weight: 600;
+}
+
+.tu-sep {
+  color: var(--ink-soft);
+  user-select: none;
+}
+
+/*
+ * .um-version-row — inline row in the settings modal for version + update check.
+ */
+.um-version-row {
+  align-items: center;
+  margin-bottom: var(--space-5);
+}
+
+.um-check-update {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-decoration: none;
+  flex: none;
+  white-space: nowrap;
+  transition: text-decoration var(--motion-fast);
+}
+
+.um-check-update:hover {
+  text-decoration: underline;
+}

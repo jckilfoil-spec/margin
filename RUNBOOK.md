@@ -88,6 +88,48 @@ If it's stale or missing tomorrow, that's yesterday's bug.
 
 ---
 
+## Cutting a release
+
+### One-time setup (already done)
+
+The Ed25519 signing keypair was generated with:
+```sh
+npm run tauri signer generate -- --output ~/.tauri/margin.key
+```
+The private key lives at `~/.tauri/margin.key` (password-protected, never committed).
+The public key is committed in `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`.
+
+Add two secrets to the GitHub repo (Settings → Secrets → Actions):
+- `TAURI_SIGNING_PRIVATE_KEY` — contents of `~/.tauri/margin.key`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the password you chose
+
+### Per-release procedure
+
+1. Ensure `main` is green (`npm test && npm run typecheck`).
+2. Bump the version in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` (e.g. `0.0.1` → `0.0.2`).
+3. Commit: `git commit -am "chore(release): bump to v0.0.2"`
+4. Tag and push:
+   ```sh
+   git tag v0.0.2
+   git push origin main --follow-tags
+   ```
+5. The `release.yml` workflow fires automatically. Monitor at:
+   `https://github.com/jckilfoil-spec/margin/actions`
+6. When the workflow succeeds, a **draft** release appears on GitHub with:
+   - `margin_0.0.2_x64_en-US.msi` (signed installer)
+   - `latest.json` (signed update manifest — Tauri generates this)
+7. Review the draft release notes, then promote to **Published**.
+8. Existing installs will see the update toast on next launch (5 s after window mount).
+
+### Rollback
+
+Downgrade is not supported by the auto-updater (by design). If a bad release ships:
+1. Delete or un-publish the GitHub release.
+2. Existing installed copies will no longer see an update offer.
+3. If users are on a broken version, publish a fix as the next version (e.g. v0.0.3).
+
+---
+
 ## Promotion gates
 
 Three explicit stops. Don't skip one.
