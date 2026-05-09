@@ -13,15 +13,33 @@ Read this file first, every time, before touching any code.
 
 ---
 
-## Last session — 2026-05-08 (spec written in Cowork; ready for Claude Code handoff)
+## Last session — 2026-05-09 (v1.1 updater: shipped)
 
-### What shipped
+### What shipped (v1 — complete)
 
-- Project scaffold copied from `_template`
-- SPEC.md written and signed off
-- HANDOFF.md generated with three-PR sequencing for Claude Code
-- DESIGN.md updated with paper aesthetic + chunky-checkbox spec
-- README.md customized for the Tauri stack
+- All three HANDOFF.md PRs landed: Tauri scaffold → Paper editor + storage → Chunky checkbox + sidebar + prompts
+- Sidebar extended beyond original spec: user sections (subdirs), inline rename/delete via pencil icon
+- Atomic page allocation in `journal.rs` (`append_page` uses `O_CREAT|O_EXCL` for concurrency safety)
+- Autosave hardened: debounced at 500ms + best-effort flush on `window.blur`
+- Brand icons generated from `download/png-square/margin-1024.png` via `npm run tauri -- icon`
+- `margin_0.0.1_x64_en-US.msi` built and installed — app is on the machine, pinnable to taskbar
+
+### What shipped (v1.1 — updater, PR #1 merged)
+
+- `tauri-plugin-updater` wired end-to-end: Rust registration, capabilities, `tauri.conf.json` pubkey + endpoint
+- `<UpdateToast>` bottom-right toast: available / downloading (%) / stalled (60s) / error states
+- Launch check fires 5s after mount; `window.blur` autosave flush before install; session suppression for "Later"
+- Settings modal (⚙) shows `margin vX.Y.Z` + **Check for updates** link; manual recheck bypasses suppression
+- `.github/workflows/release.yml` — builds signed MSI + `latest.json` on `v*` tag push → draft GitHub Release
+- GitHub Actions secrets added (`TAURI_SIGNING_PRIVATE_KEY` + `_PASSWORD`)
+- 30 tests passing, `typecheck` clean
+
+### Pick up here next session
+
+- **Cut the first release:** `git checkout main && git pull` → bump version in `tauri.conf.json` + `Cargo.toml` → commit → `git tag v0.0.2 && git push origin main --follow-tags`
+- Monitor the Actions workflow at `https://github.com/jckilfoil-spec/margin/actions`
+- Promote the draft release → installed v0.0.1 will see the update toast
+- Next feature: v2 (search across notes, tags — see SPEC.md "Not in scope" list)
 
 ### Decisions made
 
@@ -32,12 +50,9 @@ Read this file first, every time, before touching any code.
 - **Reflection prompts on-demand** (not daily auto-insert) — respects flow
 - **Folder picker on first launch** — most flexible storage location
 - **No dark mode in v1** — single aesthetic, ship faster
+- **GitHub Releases as update host** — free, repo already public, `tauri-apps/tauri-action` handles `latest.json`
+- **Ed25519 signing key** — private key at `~/.tauri/margin.key` (never commit); pubkey in `tauri.conf.json`
 
-### Pick up here next session
-
-1. Hand the brief at the bottom of HANDOFF.md to Claude Code
-2. Review PR 1 (Tauri scaffold) when it lands — confirm window opens with paper background
-3. After all 3 PRs land, smoke-test the chunky-checkbox feel and budget time to polish if it doesn't satisfy
 
 ---
 
@@ -66,17 +81,27 @@ box bounds.
 
 ### Entry points
 
-- `src-tauri/src/main.rs` → Tauri app boot, plugin registration, config commands
+- `src-tauri/src/main.rs` → just calls `margin_lib::run()`
+- `src-tauri/src/lib.rs` → Tauri builder: plugin registration + all `invoke_handler` commands
+- `src-tauri/src/config.rs` → `get_journal_dir` / `set_journal_dir` commands (read/write `config.json`)
+- `src-tauri/src/journal.rs` → all filesystem commands: read/write/delete files, sections CRUD (`list_sections`, `create_section`, `rename_section`, `delete_section`), `append_page` (atomic allocation)
 - `src/main.tsx` → React mount
-- `src/App.tsx` → Sidebar + PaperEditor + UserMenu layout
+- `src/App.tsx` → top-level layout; owns autosave state machine (debounced timer + `window.blur` flush)
+- `src/store.ts` → zustand store: `journalDir`, `activePath`, `refreshKey`, `editor: Editor | null`; v1.1 adds `updateAvailable`, `dismissedVersions`, `flushAutosaveNow`
+- `src/lib/updater.ts` *(v1.1, new)* — thin wrapper over `@tauri-apps/plugin-updater`: `checkForUpdate()`, `installUpdate(onProgress)`
+- `src/components/UpdateToast.tsx` *(v1.1, new)* — bottom-right toast: available / downloading / stalled states
 
 ### Data flow
 
 1. On launch, Rust reads `<app_config_dir>/margin/config.json` for `journalDir`.
-2. If missing, frontend shows folder-picker modal; user choice writes back to config.
-3. Frontend lists `*.md` files in `journalDir` for the sidebar.
+2. If missing, frontend shows `FolderPickerModal`; user choice writes back to config.
+3. Sidebar lists `*.md` files at `journalDir` root ("Daily" group) and each subdirectory as a named section.
 4. Today's file is opened (or created) and parsed into TipTap doc state.
-5. Edits debounce-save back to disk every 500ms via `tauri-plugin-fs`.
+5. Edits debounce-save back to disk every 500ms; additionally flushed on `window.blur` (covers most Windows close paths).
+
+**Non-obvious coupling:** `src/store.ts` holds `editor: Editor | null` — the live TipTap instance. `PromptButton` reads this ref directly to insert a blockquote at the cursor, bypassing props entirely.
+
+**Sections vs Daily:** Sections are plain subdirectories under `journalDir`. Pages inside sections follow the same `<base>.md` / `<base>_NN.md` naming convention, allocated atomically by the `append_page` Rust command (`O_CREAT|O_EXCL`).
 
 ### Key invariants
 
@@ -93,11 +118,13 @@ box bounds.
 
 ```sh
 npm run tauri dev          # launch the desktop app in dev mode (hot-reload)
-npm test                   # vitest (frontend unit tests)
+npm test                   # vitest run (frontend unit tests, single pass)
+npm run test:watch         # vitest watch mode
+npx vitest run src/path/to/file.test.ts  # run a single test file
 npm run typecheck          # tsc --noEmit (must be clean before any PR)
 npm run lint               # eslint
 npm run format             # prettier --write
-npm run build              # vite build (frontend only)
+npm run build              # tsc --noEmit + vite build (frontend only)
 npm run tauri build        # full signed installer → src-tauri/target/release/bundle/
 cd src-tauri && cargo test # Rust unit tests
 ```
@@ -112,7 +139,7 @@ Pre-flight before spawning agents: `npm test && npm run typecheck` must both exi
 
 - Files: `kebab-case.ts` / `PascalCase.tsx` for components
 - CSS tokens: `--category-name`
-- CSS classes: `kebab-case`, feature-prefixed (`paper-`, `cb-`, `sb-`, `um-`, `pb-`)
+- CSS classes: `kebab-case`, feature-prefixed (`paper-`, `cb-`, `sb-`, `um-`, `pb-`, `tu-` for updater toast)
 
 ### File size limits
 
