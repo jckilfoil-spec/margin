@@ -6,19 +6,13 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-vi.mock('@tauri-apps/api/window', () => ({
-  getCurrentWindow: () => ({
-    onCloseRequested: vi.fn().mockResolvedValue(() => undefined),
-    destroy: vi.fn().mockResolvedValue(undefined),
-  }),
-}));
-
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: vi.fn(),
 }));
 
-// Mock PaperEditor to keep ProseMirror out of the unit test surface — its
-// behavior is owned by integration testing in the live app.
+// Mock PaperEditor — ProseMirror is integration-tested in the live app, not
+// in jsdom unit tests. The mock just renders the markdown so we can assert
+// the right file is being loaded.
 vi.mock('../components/PaperEditor', () => ({
   PaperEditor: ({ initialMarkdown }: { initialMarkdown: string }) => (
     <div className="pe-content" data-testid="pe-content">
@@ -29,12 +23,23 @@ vi.mock('../components/PaperEditor', () => ({
 
 import { invoke } from '@tauri-apps/api/core';
 import { App } from '../App';
+import { useMargin } from '../store';
 
 const invokeMock = vi.mocked(invoke);
+
+function resetStore(): void {
+  useMargin.setState({
+    journalDir: null,
+    activeFilename: null,
+    refreshKey: 0,
+    editor: null,
+  });
+}
 
 describe('App', () => {
   beforeEach(() => {
     invokeMock.mockReset();
+    resetStore();
   });
 
   afterEach(() => {
@@ -69,6 +74,8 @@ describe('App', () => {
           return true;
         case 'read_journal_file':
           return '# 2026-05-08\n\nhello\n';
+        case 'list_journal_files':
+          return [];
         default:
           return null;
       }
@@ -95,6 +102,8 @@ describe('App', () => {
         }
         case 'read_journal_file':
           return '# 2026-05-08\n\n';
+        case 'list_journal_files':
+          return [];
         default:
           return null;
       }
@@ -107,5 +116,28 @@ describe('App', () => {
     const first = writes[0];
     expect(first).toBeDefined();
     expect(first?.contents.startsWith('# ')).toBe(true);
+  });
+
+  it('renders the sidebar with sb-shell when a journal dir is set', async () => {
+    invokeMock.mockImplementation(async (cmd: string) => {
+      switch (cmd) {
+        case 'get_journal_dir':
+          return '/tmp/journal';
+        case 'ensure_journal_dir':
+          return undefined;
+        case 'journal_file_exists':
+          return true;
+        case 'read_journal_file':
+          return '# 2026-05-08\n';
+        case 'list_journal_files':
+          return ['2026-05-08.md', '2026-05-07.md'];
+        default:
+          return null;
+      }
+    });
+    const { container, findByText } = render(<App />);
+    await findByText('2026-05-08');
+    expect(container.querySelector('.sb-shell')).not.toBeNull();
+    expect(container.querySelector('.app-shell')).not.toBeNull();
   });
 });

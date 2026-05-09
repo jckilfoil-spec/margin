@@ -2,7 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FolderPickerModal } from './components/FolderPickerModal';
 import { PaperEditor } from './components/PaperEditor';
-import { getJournalDir, setJournalDir } from './lib/config';
+import { PromptButton } from './components/PromptButton';
+import { Sidebar } from './components/Sidebar';
+import { UserMenu } from './components/UserMenu';
+import {
+  getJournalDir,
+  setJournalDir as persistJournalDir,
+} from './lib/config';
 import { todayHeader, todayJournalName } from './lib/dates';
 import {
   ensureJournalDir,
@@ -11,6 +17,7 @@ import {
   readJournalFile,
   writeJournalFile,
 } from './lib/storage';
+import { useMargin } from './store';
 
 const AUTOSAVE_MS = 500;
 
@@ -19,17 +26,18 @@ interface ActiveFile {
   initialMarkdown: string;
 }
 
-type DirState =
-  | { status: 'loading' }
-  | { status: 'unset' }
-  | { status: 'ready'; dir: string };
-
 function describeError(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
 export function App(): JSX.Element {
-  const [dirState, setDirState] = useState<DirState>({ status: 'loading' });
+  const journalDir = useMargin((s) => s.journalDir);
+  const activeFilename = useMargin((s) => s.activeFilename);
+  const setJournalDirState = useMargin((s) => s.setJournalDir);
+  const setActiveFilename = useMargin((s) => s.setActiveFilename);
+  const bumpRefresh = useMargin((s) => s.bumpRefresh);
+
+  const [configLoaded, setConfigLoaded] = useState(false);
   const [active, setActive] = useState<ActiveFile | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,56 +75,70 @@ export function App(): JSX.Element {
     [flush],
   );
 
-  // 1) Load journal dir from app config.
+  // 1) Load journalDir from Tauri config on mount.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const dir = await getJournalDir();
         if (cancelled) return;
-        setDirState(
-          dir !== null && dir.length > 0
-            ? { status: 'ready', dir }
-            : { status: 'unset' },
-        );
+        if (dir !== null && dir.length > 0) {
+          setJournalDirState(dir);
+        }
       } catch (e) {
         if (cancelled) return;
         setError(`Could not read app config: ${describeError(e)}`);
-        setDirState({ status: 'unset' });
+      } finally {
+        if (!cancelled) setConfigLoaded(true);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setJournalDirState]);
 
-  // 2) Once we have a dir, ensure today's file and load it.
+  // 2) Default activeFilename to today once a journalDir is set.
   useEffect(() => {
-    if (dirState.status !== 'ready') return undefined;
+    if (journalDir === null) return;
+    if (activeFilename !== null) return;
+    setActiveFilename(todayJournalName());
+  }, [journalDir, activeFilename, setActiveFilename]);
+
+  // 3) When journalDir + activeFilename are set, load the file (creating
+  // today's on demand). Flushes any pending save first so switching from
+  // a draft doesn't lose keystrokes.
+  useEffect(() => {
+    if (journalDir === null || activeFilename === null) return undefined;
     let cancelled = false;
     void (async () => {
       try {
-        await ensureJournalDir(dirState.dir);
-        const path = joinPath(dirState.dir, todayJournalName());
-        if (!(await journalFileExists(path))) {
+        await flush();
+        await ensureJournalDir(journalDir);
+        const path = joinPath(journalDir, activeFilename);
+        const isToday = activeFilename === todayJournalName();
+        const exists = await journalFileExists(path);
+        if (!exists) {
+          if (!isToday) {
+            throw new Error(`File not found: ${activeFilename}`);
+          }
           await writeJournalFile(path, `${todayHeader()}\n\n`);
+          bumpRefresh();
         }
         const content = await readJournalFile(path);
         if (cancelled) return;
         setActive({ path, initialMarkdown: content });
       } catch (e) {
         if (cancelled) return;
-        setError(`Could not open today's page: ${describeError(e)}`);
+        setError(`Could not open ${activeFilename}: ${describeError(e)}`);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [dirState]);
+  }, [journalDir, activeFilename, bumpRefresh, flush]);
 
-  // 3) Best-effort flush on window blur (alt-tab, app switch, X click).
-  // The 500ms debounce + this blur covers SPEC's "closing the app loses
-  // no data" without us holding the window open via onCloseRequested.
+  // 4) Best-effort flush on window blur — covers most close paths without
+  // an onCloseRequested handler (which hangs the X on Windows).
   useEffect(() => {
     function onBlur(): void {
       flush().catch(() => undefined);
@@ -127,18 +149,18 @@ export function App(): JSX.Element {
 
   async function handlePicked(path: string): Promise<void> {
     try {
-      await setJournalDir(path);
-      setDirState({ status: 'ready', dir: path });
+      await persistJournalDir(path);
+      setJournalDirState(path);
     } catch (e) {
       setError(`Could not save folder choice: ${describeError(e)}`);
     }
   }
 
-  if (dirState.status === 'loading') {
+  if (!configLoaded) {
     return <main className="paper-surface" aria-label="margin notepad" />;
   }
 
-  if (dirState.status === 'unset') {
+  if (journalDir === null) {
     return (
       <>
         <main className="paper-surface" aria-label="margin notepad" />
@@ -148,19 +170,28 @@ export function App(): JSX.Element {
   }
 
   return (
-    <main className="paper-surface" aria-label="margin notepad">
-      {error !== null ? (
-        <p className="pe-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {active !== null ? (
-        <PaperEditor
-          key={active.path}
-          initialMarkdown={active.initialMarkdown}
-          onChange={schedule}
-        />
-      ) : null}
-    </main>
+    <div className="app-shell">
+      <aside className="sb-shell">
+        <Sidebar />
+        <div className="sb-footer">
+          <UserMenu />
+          <PromptButton />
+        </div>
+      </aside>
+      <main className="paper-surface" aria-label="margin notepad">
+        {error !== null ? (
+          <p className="pe-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {active !== null ? (
+          <PaperEditor
+            key={active.path}
+            initialMarkdown={active.initialMarkdown}
+            onChange={schedule}
+          />
+        ) : null}
+      </main>
+    </div>
   );
 }

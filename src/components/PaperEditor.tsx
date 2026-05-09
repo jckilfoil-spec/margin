@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { Editor, EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
 import { Markdown } from 'tiptap-markdown';
+
+import { ChunkyTaskItem } from './ChunkyCheckbox';
+import { useMargin } from '../store';
 
 interface Props {
   initialMarkdown: string;
@@ -34,6 +36,8 @@ export function PaperEditor({ initialMarkdown, onChange }: Props): JSX.Element {
     onChangeRef.current = onChange;
   }, [onChange]);
 
+  const setEditor = useMargin((s) => s.setEditor);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -47,13 +51,22 @@ export function PaperEditor({ initialMarkdown, onChange }: Props): JSX.Element {
         transformCopiedText: true,
       }),
       TaskList,
-      TaskItem.configure({ nested: true }),
+      ChunkyTaskItem.configure({ nested: true }),
     ],
     content: initialMarkdown,
     onUpdate: ({ editor: e }) => {
       onChangeRef.current(readMarkdown(e));
     },
   });
+
+  // Expose the live editor to PromptButton (and any future components) via
+  // the zustand store.
+  useEffect(() => {
+    setEditor(editor);
+    return () => {
+      setEditor(null);
+    };
+  }, [editor, setEditor]);
 
   return <EditorContent editor={editor} className="pe-content" />;
 }

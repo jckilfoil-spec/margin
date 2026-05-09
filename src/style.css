@@ -158,8 +158,7 @@ a:hover {
 
 /*
  * .pe-* — paper editor. Keeps every block on the rule grid by anchoring
- * margins and line-height to --line-height. PR 3 will tune heading sizes
- * and add the chunky checkbox node view.
+ * margins and line-height to --line-height.
  */
 .pe-content,
 .pe-content > .ProseMirror {
@@ -201,16 +200,7 @@ a:hover {
 .pe-content .ProseMirror ul[data-type='taskList'] {
   list-style: none;
   padding-left: 0;
-}
-
-.pe-content .ProseMirror ul[data-type='taskList'] li {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
-}
-
-.pe-content .ProseMirror ul[data-type='taskList'] li > div {
-  flex: 1;
+  margin: 0;
 }
 
 .pe-content .ProseMirror code {
@@ -320,4 +310,273 @@ a:hover {
 
 .btn-primary:hover:not(:disabled) {
   background: #000;
+}
+
+/*
+ * .app-shell — main layout: fixed sidebar on the left, paper on the right.
+ * The sidebar's footer holds the user menu + prompt button (DESIGN.md
+ * convention: bottom-left).
+ */
+.app-shell {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.app-shell > .paper-surface {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sb-shell {
+  width: var(--sidebar-w);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-edge);
+  border-right: 1px solid #e6e3d8;
+  min-height: 0;
+}
+
+/*
+ * .sb-* — sidebar list of journal days, grouped by month, newest first.
+ */
+.sb {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-7) var(--space-5);
+}
+
+.sb-empty {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+
+.sb-month {
+  margin: 0 0 var(--space-7) 0;
+}
+
+.sb-month-header {
+  margin: 0 0 var(--space-3) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sb-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sb-day {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-base);
+  color: var(--ink-dim);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.sb-day:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--ink);
+}
+
+.sb-day.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.sb-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid #e6e3d8;
+  flex: none;
+}
+
+/*
+ * .um-* — user menu (settings cog) + settings modal contents.
+ */
+.um-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-dim);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  flex: none;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.um-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink);
+}
+
+.um-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin-bottom: var(--space-7);
+}
+
+.um-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.um-label {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-dim);
+}
+
+.um-value {
+  margin: var(--space-1) 0 0 0;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.um-divider {
+  border: 0;
+  border-top: 1px solid var(--paper-edge);
+  margin: var(--space-7) 0;
+}
+
+.um-meta {
+  margin: 0 0 var(--space-7) 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.um-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/*
+ * .pb-* — "Ask me something" prompt button (sidebar footer).
+ */
+.pb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  background: transparent;
+  border: 1px solid var(--ink-soft);
+  border-radius: 999px;
+  color: var(--ink-dim);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color var(--motion-fast), color var(--motion-fast);
+}
+
+.pb-btn:hover:not(:disabled) {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.pb-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/*
+ * .cb-* — chunky checkbox. The signature interaction.
+ *
+ * Geometry:
+ *   - 24x24px box, 2px ink border, 4px radius.
+ *   - 32x32 SVG positioned at top:-4 left:-4 — gives 4px overflow each side.
+ *   - Path "M 4 18 L 13 26 L 30 4" with stroke-width 4 + round caps:
+ *     the right end's round cap extends 2px past x=30, hitting the box
+ *     right edge at x=32 (4px overflow from the 24x24 box). The check
+ *     visibly spills out — that overflow IS the feature.
+ *   - Animation: stroke-dashoffset transitions from path length to 0
+ *     (drawing in) over --motion-check.
+ */
+.cb-li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  list-style: none;
+  line-height: var(--line-height);
+  margin: 0;
+  padding: 0;
+}
+
+.cb-box {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  position: relative;
+  overflow: visible;
+  /* Sit the box so its center is roughly on the line's x-height. */
+  margin-top: 2px;
+  transition: filter var(--motion-fast);
+}
+
+.cb-box:hover {
+  filter: brightness(0.55);
+}
+
+.cb-box:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cb-svg {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  pointer-events: none;
+}
+
+.cb-path {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke-dashoffset var(--motion-check);
+}
+
+.cb-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.cb-li[data-checked='true'] .cb-content {
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-soft);
+  color: var(--ink-dim);
 }
