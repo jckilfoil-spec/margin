@@ -118,19 +118,21 @@ export function App(): JSX.Element {
 
   // 3) Flush any pending autosave on window close.
   // SPEC.md acceptance: "Closing the app loses no data."
+  //
+  // We do NOT call event.preventDefault(): Tauri awaits the async handler
+  // and then closes the window naturally. preventDefault + win.destroy()
+  // was hanging the close on Windows. The 800ms race is a safety belt so
+  // a stuck invoke can never block exit indefinitely.
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
     let cancelled = false;
     const win = getCurrentWindow();
     win
-      .onCloseRequested(async (event) => {
-        event.preventDefault();
-        try {
-          await flush();
-        } catch {
-          // Closing anyway — losing one keystroke is better than blocking exit.
-        }
-        await win.destroy();
+      .onCloseRequested(async () => {
+        await Promise.race([
+          flush().catch(() => undefined),
+          new Promise<void>((resolve) => setTimeout(resolve, 800)),
+        ]);
       })
       .then((u) => {
         if (cancelled) {
@@ -146,6 +148,17 @@ export function App(): JSX.Element {
       cancelled = true;
       unlisten?.();
     };
+  }, [flush]);
+
+  // 4) Best-effort flush on window blur (alt-tab, app switch). Cheap belt-
+  // and-suspenders: by the time close-requested fires, often nothing is
+  // pending because we already saved on blur.
+  useEffect(() => {
+    function onBlur(): void {
+      flush().catch(() => undefined);
+    }
+    window.addEventListener('blur', onBlur);
+    return () => window.removeEventListener('blur', onBlur);
   }, [flush]);
 
   async function handlePicked(path: string): Promise<void> {
