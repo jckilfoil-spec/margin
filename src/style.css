@@ -62,7 +62,7 @@
   /* Motion */
   --motion-fast:  0.15s ease;
   --motion-base:  0.20s ease;
-  --motion-check: 0.20s cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-check: 0.14s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Reset — minimal, intentional. */
@@ -146,12 +146,14 @@ a:hover {
     100% var(--line-height),
     100% 100%;
   /*
-   * background-position 0 0 puts each rule in the bottom 1px of its 28px
-   * tile (rules at y=27, 55, 83, ...). Combined with padding-top of one
-   * line-height (28px), every text line's bottom lands on a rule:
-   * descenders end ~1–2px above the rule, headings deliberately overshoot.
+   * Rules land at the body-text baseline so glyphs sit ON the line, like
+   * the brand icon. Segoe UI and Inter both put the baseline ~20px below
+   * the line-top at font-size 16 / line-height 28. With padding-top 28,
+   * line 1's baseline is at y=48 — background-position 0 21px puts the
+   * gradient's bottom-1px rule there. Rules then march down at 76, 104, ...
+   * H1 (24px) is the deliberate exception — its larger glyphs poke past.
    */
-  background-position: 0 0;
+  background-position: 0 21px;
   padding: var(--line-height) var(--space-10) var(--space-9)
     calc(var(--margin-x) + var(--space-7));
 }
@@ -247,6 +249,7 @@ a:hover {
 }
 
 .mdl {
+  position: relative;
   background: var(--paper);
   border: 1px solid var(--paper-edge);
   border-radius: var(--radius-lg);
@@ -254,6 +257,28 @@ a:hover {
   padding: var(--space-9) var(--space-10);
   max-width: 460px;
   width: calc(100% - var(--space-10));
+}
+
+.mdl-close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.mdl-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink);
 }
 
 .mdl-title {
@@ -467,15 +492,9 @@ a:hover {
 }
 
 .um-meta {
-  margin: 0 0 var(--space-7) 0;
+  margin: 0;
   color: var(--ink-soft);
   font-size: var(--text-sm);
-}
-
-.um-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
 }
 
 /*

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings } from 'lucide-react';
+import { Settings, X } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 
 import { setJournalDir as persistJournalDir } from '../lib/config';
@@ -46,6 +46,15 @@ function SettingsModal({ onClose }: SettingsModalProps): JSX.Element {
       onClick={onClose}
     >
       <div className="mdl" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          className="mdl-close"
+          onClick={onClose}
+          aria-label="Close settings"
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+
         <h2 id="um-settings-title" className="mdl-title">
           Settings
         </h2>
@@ -80,12 +89,6 @@ function SettingsModal({ onClose }: SettingsModalProps): JSX.Element {
         <p className="um-meta">
           margin — local notes, no cloud, no telemetry.
         </p>
-
-        <div className="um-actions">
-          <button type="button" className="btn btn-primary" onClick={onClose}>
-            Close
-          </button>
-        </div>
       </div>
     </div>
   );
