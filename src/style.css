@@ -151,3 +151,169 @@ a:hover {
   padding: var(--space-9) var(--space-10) var(--space-9)
     calc(var(--margin-x) + var(--space-7));
 }
+
+/*
+ * .pe-* — paper editor. Keeps every block on the rule grid by anchoring
+ * margins and line-height to --line-height. PR 3 will tune heading sizes
+ * and add the chunky checkbox node view.
+ */
+.pe-content,
+.pe-content > .ProseMirror {
+  outline: none;
+}
+
+.pe-content .ProseMirror > * {
+  margin: 0;
+  line-height: var(--line-height);
+}
+
+.pe-content .ProseMirror p {
+  min-height: var(--line-height);
+}
+
+.pe-content .ProseMirror h1 {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  line-height: var(--line-height);
+}
+
+.pe-content .ProseMirror h2 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: var(--line-height);
+}
+
+.pe-content .ProseMirror h3 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--line-height);
+}
+
+.pe-content .ProseMirror ul,
+.pe-content .ProseMirror ol {
+  padding-left: var(--space-9);
+}
+
+.pe-content .ProseMirror ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.pe-content .ProseMirror ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.pe-content .ProseMirror ul[data-type='taskList'] li > div {
+  flex: 1;
+}
+
+.pe-content .ProseMirror code {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  background: rgba(20, 50, 120, 0.06);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.pe-content .ProseMirror blockquote {
+  border-left: 2px solid var(--ink-soft);
+  padding-left: var(--space-5);
+  color: var(--ink-dim);
+}
+
+.pe-error {
+  position: fixed;
+  top: var(--space-5);
+  right: var(--space-5);
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  background: var(--paper-edge);
+  border: 1px solid var(--ink-soft);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  max-width: 360px;
+  z-index: 5;
+}
+
+/*
+ * .mdl-* — modal scrim + card. Used by FolderPickerModal on first launch.
+ * Single button, single decision: pick a folder.
+ */
+.mdl-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 30, 50, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.mdl {
+  background: var(--paper);
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+  padding: var(--space-9) var(--space-10);
+  max-width: 460px;
+  width: calc(100% - var(--space-10));
+}
+
+.mdl-title {
+  margin: 0 0 var(--space-5) 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: var(--line-height);
+}
+
+.mdl-body {
+  margin: 0 0 var(--space-7) 0;
+  color: var(--ink-dim);
+  font-size: var(--text-base);
+  line-height: var(--line-height);
+}
+
+.mdl-error {
+  margin: 0 0 var(--space-5) 0;
+  color: #b22020;
+  font-size: var(--text-sm);
+}
+
+/*
+ * Buttons. Pill ghost by default; .btn-primary fills with ink.
+ */
+.btn {
+  font-family: inherit;
+  font-size: var(--text-base);
+  padding: var(--space-3) var(--space-7);
+  border: 1px solid var(--ink-soft);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast),
+    border-color var(--motion-fast);
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.btn-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #000;
+}
