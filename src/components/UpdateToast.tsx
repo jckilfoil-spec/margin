@@ -89,6 +89,7 @@ export function UpdateToast(): JSX.Element | null {
   }
 
   function handleInstallNow(): void {
+    if (update === null) return;
     void (async () => {
       // Flush pending edits before we trigger the installer restart
       await flushAutosaveNow();
