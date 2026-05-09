@@ -145,10 +145,14 @@ a:hover {
   background-size:
     100% var(--line-height),
     100% 100%;
-  background-position:
-    0 6px,
-    0 0;
-  padding: var(--space-9) var(--space-10) var(--space-9)
+  /*
+   * background-position 0 0 puts each rule in the bottom 1px of its 28px
+   * tile (rules at y=27, 55, 83, ...). Combined with padding-top of one
+   * line-height (28px), every text line's bottom lands on a rule:
+   * descenders end ~1–2px above the rule, headings deliberately overshoot.
+   */
+  background-position: 0 0;
+  padding: var(--line-height) var(--space-10) var(--space-9)
     calc(var(--margin-x) + var(--space-7));
 }
 
