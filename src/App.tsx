@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { UnlistenFn } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 
 import { FolderPickerModal } from './components/FolderPickerModal';
 import { PaperEditor } from './components/PaperEditor';
@@ -116,43 +114,9 @@ export function App(): JSX.Element {
     };
   }, [dirState]);
 
-  // 3) Flush any pending autosave on window close.
-  // SPEC.md acceptance: "Closing the app loses no data."
-  //
-  // We do NOT call event.preventDefault(): Tauri awaits the async handler
-  // and then closes the window naturally. preventDefault + win.destroy()
-  // was hanging the close on Windows. The 800ms race is a safety belt so
-  // a stuck invoke can never block exit indefinitely.
-  useEffect(() => {
-    let unlisten: UnlistenFn | undefined;
-    let cancelled = false;
-    const win = getCurrentWindow();
-    win
-      .onCloseRequested(async () => {
-        await Promise.race([
-          flush().catch(() => undefined),
-          new Promise<void>((resolve) => setTimeout(resolve, 800)),
-        ]);
-      })
-      .then((u) => {
-        if (cancelled) {
-          u();
-          return;
-        }
-        unlisten = u;
-      })
-      .catch(() => {
-        // Outside Tauri (e.g., vitest) — no window to listen on.
-      });
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [flush]);
-
-  // 4) Best-effort flush on window blur (alt-tab, app switch). Cheap belt-
-  // and-suspenders: by the time close-requested fires, often nothing is
-  // pending because we already saved on blur.
+  // 3) Best-effort flush on window blur (alt-tab, app switch, X click).
+  // The 500ms debounce + this blur covers SPEC's "closing the app loses
+  // no data" without us holding the window open via onCloseRequested.
   useEffect(() => {
     function onBlur(): void {
       flush().catch(() => undefined);
