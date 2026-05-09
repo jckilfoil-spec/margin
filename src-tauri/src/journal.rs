@@ -57,6 +57,11 @@ pub fn ensure_journal_dir(path: String) -> Result<(), String> {
     fs::create_dir_all(&path).map_err(|e| format!("create_dir_all failed: {e}"))
 }
 
+#[tauri::command]
+pub fn delete_journal_file(path: String) -> Result<(), String> {
+    fs::remove_file(&path).map_err(|e| format!("remove_file failed: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,5 +114,22 @@ mod tests {
         ensure_journal_dir(target.to_string_lossy().into()).unwrap();
         ensure_journal_dir(target.to_string_lossy().into()).unwrap();
         assert!(target.is_dir());
+    }
+
+    #[test]
+    fn delete_removes_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("x.md");
+        fs::write(&path, "x").unwrap();
+        delete_journal_file(path.to_string_lossy().into()).unwrap();
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn delete_missing_file_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("nope.md");
+        let err = delete_journal_file(path.to_string_lossy().into()).unwrap_err();
+        assert!(err.contains("remove_file failed"));
     }
 }

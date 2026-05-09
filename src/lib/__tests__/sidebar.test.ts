@@ -51,4 +51,24 @@ describe('groupByMonth', () => {
       },
     ]);
   });
+
+  it('orders _NN suffix pages after the base file within a day', () => {
+    const groups = groupByMonth([
+      '2026-05-09_02.md',
+      '2026-05-09.md',
+      '2026-05-09_01.md',
+      '2026-05-08.md',
+    ]);
+    expect(groups).toEqual([
+      {
+        month: 'May 2026',
+        days: [
+          { filename: '2026-05-09.md', dateString: '2026-05-09' },
+          { filename: '2026-05-09_01.md', dateString: '2026-05-09_01' },
+          { filename: '2026-05-09_02.md', dateString: '2026-05-09_02' },
+          { filename: '2026-05-08.md', dateString: '2026-05-08' },
+        ],
+      },
+    ]);
+  });
 });

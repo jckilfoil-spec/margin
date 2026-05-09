@@ -12,7 +12,9 @@ export interface MonthGroup {
   days: DayEntry[];
 }
 
-const FILENAME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})\.md$/;
+// Matches `YYYY-MM-DD.md` and `YYYY-MM-DD_NN.md`. The `_NN` suffix is the
+// page-within-day index (created by Sidebar's "+ New page" button).
+const FILENAME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:_(\d+))?\.md$/;
 const MONTH_NAMES = [
   'January',
   'February',
@@ -33,6 +35,7 @@ interface ParsedFile {
   year: number;
   month: number; // 1-indexed
   day: number;
+  suffix: number; // 0 for the base YYYY-MM-DD.md, otherwise the _NN value.
 }
 
 function parseFilename(filename: string): ParsedFile | null {
@@ -41,10 +44,12 @@ function parseFilename(filename: string): ParsedFile | null {
   const year = Number(m[1]);
   const month = Number(m[2]);
   const day = Number(m[3]);
+  const suffix = m[4] === undefined ? 0 : Number(m[4]);
   if (
     !Number.isFinite(year) ||
     !Number.isFinite(month) ||
     !Number.isFinite(day) ||
+    !Number.isFinite(suffix) ||
     month < 1 ||
     month > 12 ||
     day < 1 ||
@@ -52,7 +57,7 @@ function parseFilename(filename: string): ParsedFile | null {
   ) {
     return null;
   }
-  return { filename, year, month, day };
+  return { filename, year, month, day, suffix };
 }
 
 export function groupByMonth(filenames: string[]): MonthGroup[] {
@@ -62,12 +67,13 @@ export function groupByMonth(filenames: string[]): MonthGroup[] {
     if (p !== null) parsed.push(p);
   }
 
-  // Sort newest first (lexicographic on YYYY-MM-DD also works, but explicit
-  // numeric comparison keeps intent obvious).
+  // Newest day first; within a day, base then _01, _02, ... so the
+  // sidebar reads top-down in creation order.
   parsed.sort((a, b) => {
     if (a.year !== b.year) return b.year - a.year;
     if (a.month !== b.month) return b.month - a.month;
-    return b.day - a.day;
+    if (a.day !== b.day) return b.day - a.day;
+    return a.suffix - b.suffix;
   });
 
   const groups: MonthGroup[] = [];

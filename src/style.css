@@ -366,11 +366,42 @@ a:hover {
 
 /*
  * .sb-* — sidebar list of journal days, grouped by month, newest first.
+ * The "+ New page" button at the top creates a YYYY-MM-DD_NN.md file for
+ * today; per-day rows show a × on hover/focus that confirms then deletes.
  */
 .sb {
   flex: 1;
   overflow-y: auto;
   padding: var(--space-7) var(--space-5);
+}
+
+.sb-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-7);
+  background: transparent;
+  border: 1px dashed var(--ink-soft);
+  border-radius: var(--radius-sm);
+  color: var(--ink-dim);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast),
+    color var(--motion-fast);
+}
+
+.sb-add:hover:not(:disabled) {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.sb-add:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .sb-empty {
@@ -399,11 +430,17 @@ a:hover {
   padding: 0;
 }
 
+.sb-day-row {
+  position: relative;
+}
+
 .sb-day {
   display: block;
   width: 100%;
   text-align: left;
-  padding: var(--space-2) var(--space-4);
+  /* Right padding leaves room for the absolutely-positioned × button. */
+  padding: var(--space-2) calc(var(--space-7) + var(--space-2)) var(--space-2)
+    var(--space-4);
   font-size: var(--text-base);
   color: var(--ink-dim);
   border-radius: var(--radius-sm);
@@ -423,6 +460,38 @@ a:hover {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 500;
+}
+
+.sb-day-delete {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--motion-fast),
+    background var(--motion-fast),
+    color var(--motion-fast);
+}
+
+.sb-day-row:hover .sb-day-delete,
+.sb-day-row:focus-within .sb-day-delete {
+  opacity: 1;
+}
+
+.sb-day-delete:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #b22020;
 }
 
 .sb-footer {

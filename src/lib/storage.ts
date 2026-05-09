@@ -23,6 +23,10 @@ export async function ensureJournalDir(path: string): Promise<void> {
   await invoke('ensure_journal_dir', { path });
 }
 
+export async function deleteJournalFile(path: string): Promise<void> {
+  await invoke('delete_journal_file', { path });
+}
+
 // Cross-platform path join. The journal dir comes from the OS picker so its
 // own separator is the source of truth — we only fall back to '/' if the path
 // somehow has neither.

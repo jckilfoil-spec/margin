@@ -14,6 +14,7 @@ pub fn run() {
             journal::write_journal_file,
             journal::journal_file_exists,
             journal::ensure_journal_dir,
+            journal::delete_journal_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
